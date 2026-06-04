@@ -157,7 +157,18 @@ final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
 
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
                     from connections: [AVCaptureConnection], error: Error?) {
-        onFinish(error == nil ? outputFileURL : nil)
+        // AVCaptureMovieFileOutput delivers a non-nil error on almost every
+        // successful stop. The recording is still usable when the error carries
+        // AVErrorRecordingSuccessfullyFinishedKey == true — treating any error
+        // as failure (the old behaviour) silently discarded every clip.
+        var usable = error == nil
+        if let nsError = error as NSError? {
+            usable = (nsError.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool) ?? false
+        }
+        // Final guard: the file must exist and actually contain data.
+        let attrs = try? FileManager.default.attributesOfItem(atPath: outputFileURL.path)
+        let size = (attrs?[.size] as? Int) ?? 0
+        onFinish(usable && size > 0 ? outputFileURL : nil)
     }
 }
 
