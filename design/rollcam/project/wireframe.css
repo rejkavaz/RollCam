@@ -1,0 +1,161 @@
+/* RollCam — wireframe styling. Structured grayscale, one HR accent. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --wf-ink:      #2A3140;   /* headings / strong */
+  --wf-ink-2:    #5B6573;   /* body */
+  --wf-ink-3:    #8A93A3;   /* muted / placeholder */
+  --wf-line:     #C2C8D2;   /* solid borders */
+  --wf-line-2:   #D8DCE4;   /* light dividers */
+  --wf-fill:     #EEF0F4;   /* filled box */
+  --wf-fill-2:   #F6F7F9;   /* faint box */
+  --wf-white:    #FFFFFF;
+  --wf-hr:       #E2574C;   /* the single accent — heart rate */
+  --wf-hr-soft:  #F7D9D6;
+  --wf-note:     #2E6FB8;   /* annotation blue (meta, not part of UI) */
+  --wf-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --wf-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+.wf { font-family: var(--wf-sans); color: var(--wf-ink-2); }
+.wf-mono { font-family: var(--wf-mono); }
+
+/* ---------- Phone frame ---------- */
+.phone {
+  position: relative;
+  background: var(--wf-white);
+  border: 2px solid var(--wf-ink);
+  border-radius: 30px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.phone--land { border-radius: 26px; }
+
+.statusbar {
+  flex: 0 0 auto;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-family: var(--wf-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--wf-ink);
+  letter-spacing: .02em;
+}
+.statusbar .dots { display: flex; gap: 4px; align-items: center; }
+.statusbar .dots i { display: block; width: 14px; height: 8px; border: 1px solid var(--wf-ink); border-radius: 2px; }
+
+.screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+/* ---------- generic wireframe atoms ---------- */
+.row { display: flex; }
+.col { display: flex; flex-direction: column; }
+.gap-1 { gap: 4px; } .gap-2 { gap: 8px; } .gap-3 { gap: 12px; } .gap-4 { gap: 16px; }
+.center { align-items: center; justify-content: center; }
+.between { justify-content: space-between; }
+.aic { align-items: center; }
+
+.box {
+  border: 1px solid var(--wf-line);
+  border-radius: 8px;
+  background: var(--wf-white);
+}
+.box--fill { background: var(--wf-fill); border-color: var(--wf-line-2); }
+.box--faint { background: var(--wf-fill-2); border-color: var(--wf-line-2); }
+.box--dash { border-style: dashed; }
+
+/* media placeholder: box with diagonal cross */
+.media {
+  position: relative;
+  background:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--wf-line-2), transparent calc(50% + 1px)),
+    linear-gradient(to top left,  transparent calc(50% - 1px), var(--wf-line-2), transparent calc(50% + 1px));
+  border: 1px dashed var(--wf-line);
+  background-color: var(--wf-fill-2);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.media span {
+  font-family: var(--wf-mono); font-size: 10px; color: var(--wf-ink-3);
+  background: var(--wf-fill-2); padding: 2px 6px; letter-spacing: .04em;
+}
+
+/* skeleton text lines */
+.line { height: 7px; border-radius: 3px; background: var(--wf-fill); }
+.line.dk { background: var(--wf-line-2); }
+.line.w-90 { width: 90%; } .line.w-75 { width: 75%; } .line.w-60 { width: 60%; }
+.line.w-45 { width: 45%; } .line.w-30 { width: 30%; }
+
+.eyebrow {
+  font-family: var(--wf-mono); font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .14em; color: var(--wf-ink-3);
+}
+.h-title { font-weight: 700; color: var(--wf-ink); letter-spacing: -.01em; }
+.sub { color: var(--wf-ink-3); }
+
+.pill {
+  border: 1px solid var(--wf-line); border-radius: 999px;
+  padding: 4px 10px; font-size: 11px; color: var(--wf-ink-2);
+  background: var(--wf-white); white-space: nowrap;
+}
+.pill--on { background: var(--wf-ink); color: #fff; border-color: var(--wf-ink); }
+
+.btn {
+  border: 1.5px solid var(--wf-ink); border-radius: 8px;
+  padding: 10px 14px; font-weight: 600; font-size: 13px; color: var(--wf-ink);
+  background: var(--wf-white); text-align: center;
+}
+.btn--solid { background: var(--wf-ink); color: #fff; }
+.btn--ghost { border-style: dashed; color: var(--wf-ink-3); border-color: var(--wf-line); }
+
+.icon {
+  width: 22px; height: 22px; border: 1.5px solid var(--wf-ink-2);
+  border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--wf-mono); font-size: 11px; color: var(--wf-ink-2); flex: 0 0 auto;
+}
+.icon--circle { border-radius: 50%; }
+
+/* bottom tab bar */
+.tabbar {
+  flex: 0 0 auto; border-top: 1px solid var(--wf-line-2);
+  display: flex; padding: 8px 6px 12px;
+}
+.tabbar .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tabbar .tab .icon { width: 24px; height: 24px; }
+.tabbar .tab span { font-family: var(--wf-mono); font-size: 8px; color: var(--wf-ink-3); }
+.tabbar .tab.on .icon { border-color: var(--wf-ink); color: var(--wf-ink); background: var(--wf-fill); }
+.tabbar .tab.on span { color: var(--wf-ink); }
+
+/* heart-rate accent atoms */
+.hr-num { font-family: var(--wf-mono); font-weight: 600; color: var(--wf-hr); line-height: 1; }
+.hr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wf-hr); flex:0 0 auto; }
+.zone-tag {
+  font-family: var(--wf-mono); font-size: 10px; font-weight: 600;
+  border: 1px solid var(--wf-hr); color: var(--wf-hr); border-radius: 4px; padding: 2px 6px;
+}
+
+/* annotation callout (meta — explains the wireframe, not part of UI) */
+.note {
+  font-family: var(--wf-mono); font-size: 10px; line-height: 1.4;
+  color: var(--wf-note); display: flex; gap: 6px; align-items: flex-start;
+}
+.note .num {
+  flex: 0 0 auto; width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid var(--wf-note); display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 600;
+}
+.note-badge {
+  position: absolute; z-index: 5;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--wf-note); color: #fff;
+  font-family: var(--wf-mono); font-size: 9px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+
+.divider { height: 1px; background: var(--wf-line-2); }

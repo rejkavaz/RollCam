@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RollCam — Wireframes</title>
+  <link rel="stylesheet" href="wireframe.css" />
+  <style>
+    html, body { margin: 0; padding: 0; }
+    #root { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="frames.jsx"></script>
+  <script type="text/babel" src="screen_record.jsx"></script>
+  <script type="text/babel" src="screen_post.jsx"></script>
+  <script type="text/babel" src="screen_library.jsx"></script>
+  <script type="text/babel" src="screen_dashboard.jsx"></script>
+  <script type="text/babel" src="screen_timer.jsx"></script>
+  <script type="text/babel" src="screen_export.jsx"></script>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard } = window;
+    const PAD = { padding: 20 };
+
+    function App() {
+      return (
+        <DesignCanvas>
+          <DCSection id="capture" title="1 · Capture" subtitle="Set up a session, then record with HR burned into the frame">
+            <DCArtboard id="timer" label="Round timer setup" width={606} height={730} style={PAD}>
+              <TimerSetup />
+            </DCArtboard>
+            <DCArtboard id="rec-p" label="Recording · portrait" width={606} height={730} style={PAD}>
+              <RecordPortrait />
+            </DCArtboard>
+            <DCArtboard id="rec-l" label="Recording · landscape" width={740} height={540} style={PAD}>
+              <RecordLandscape />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="review" title="2 · Review & analyze" subtitle="After the roll: the graph, AI read-out, and tagging">
+            <DCArtboard id="post" label="Post-session overview" width={606} height={820} style={PAD}>
+              <PostOverview />
+            </DCArtboard>
+            <DCArtboard id="tag" label="Review & tag" width={606} height={730} style={PAD}>
+              <ReviewTag />
+            </DCArtboard>
+            <DCArtboard id="cmp" label="Round comparison" width={606} height={730} style={PAD}>
+              <RoundCompare />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="progress" title="3 · Track progress" subtitle="Browse the library and watch fitness trend over time">
+            <DCArtboard id="lib" label="Session library" width={606} height={820} style={PAD}>
+              <Library />
+            </DCArtboard>
+            <DCArtboard id="dash" label="Athlete dashboard" width={606} height={860} style={PAD}>
+              <Dashboard />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="share" title="4 · Share & export" subtitle="Burn the overlay in and post the clip">
+            <DCArtboard id="exp" label="Video export suite" width={606} height={860} style={PAD}>
+              <ExportSuite />
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

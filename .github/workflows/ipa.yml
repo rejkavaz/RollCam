@@ -1,0 +1,111 @@
+name: IPA
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'design/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # for the optional Release upload
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned .ipa for sideloading
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS device (arm64, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project RollCam.xcodeproj \
+            -scheme RollCam \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
+
+      - name: Verify build output
+        id: build
+        run: |
+          APP="build/Build/Products/Release-iphoneos/RollCam.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::Expected .app not found at $APP"
+            find build -name "*.app" -maxdepth 6 -print
+            exit 1
+          fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          ls -la "$APP"
+
+      - name: Strip any residual signature
+        run: |
+          APP="${{ steps.build.outputs.app }}"
+          # codesign --remove-signature succeeds whether or not one exists.
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          # Remove any embedded provisioning profile (free signers add their own).
+          rm -f "$APP/embedded.mobileprovision"
+
+      - name: Package into .ipa
+        id: package
+        run: |
+          APP="${{ steps.build.outputs.app }}"
+          STAGE="ipa-staging"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/Payload"
+          cp -R "$APP" "$STAGE/Payload/"
+          # Tag the filename with short SHA + run number for traceability.
+          SHA=$(git rev-parse --short HEAD)
+          OUT="RollCam-${SHA}-r${{ github.run_number }}.ipa"
+          (cd "$STAGE" && zip -qr "../$OUT" Payload)
+          ls -la "$OUT"
+          echo "ipa=$OUT" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.ipa }}
+          path: ${{ steps.package.outputs.ipa }}
+          retention-days: 30
+
+      - name: Publish to GitHub Release (master only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="ipa-${{ steps.package.outputs.sha }}"
+          gh release create "$TAG" \
+            "${{ steps.package.outputs.ipa }}" \
+            --title "Unsigned .ipa @ ${{ steps.package.outputs.sha }}" \
+            --notes "Drop into Sideloadly (or AltStore) to sign with your Apple ID and install on your iPhone. See README for details." \
+            --target "${{ github.sha }}" \
+            || gh release upload "$TAG" "${{ steps.package.outputs.ipa }}" --clobber
