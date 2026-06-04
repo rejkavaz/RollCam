@@ -155,6 +155,9 @@ struct ReviewTagView: View {
         let marker = TagMarker(timeLabel: timeAt, tag: tag, symbol: symbol, bpm: bpmAt, pos: ph)
         session.tagged.append(marker)
         session.tagged.sort { $0.pos < $1.pos }
+        // Keep the session's note tags in sync so Library filters/chips match.
+        var seen = Set<String>()
+        session.noteTags = session.tagged.map(\.tag).filter { seen.insert($0).inserted }
         try? context.save()
     }
 }

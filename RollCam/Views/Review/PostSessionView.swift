@@ -5,6 +5,10 @@ struct PostSessionView: View {
     var fresh: Bool
 
     @Environment(Router.self) private var router
+    @Environment(\.modelContext) private var context
+
+    @State private var showRename = false
+    @State private var draftTitle = ""
 
     private var breakdown: String { SessionAnalytics.breakdown(for: session) }
 
@@ -14,7 +18,24 @@ struct PostSessionView: View {
                 RCHeader(eyebrow: fresh ? "Saved · just now"
                          : "\(session.dayLabel) · \(session.dateLabel) · \(session.timeLabel)",
                          onBack: { router.pop() }) {
-                    IconButton(systemName: "ellipsis")
+                    Menu {
+                        Button { draftTitle = session.title; showRename = true } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button { router.push(.export(id: session.id)) } label: {
+                            Label("Export / CSV", systemImage: "square.and.arrow.up")
+                        }
+                        Button(role: .destructive) { deleteSession() } label: {
+                            Label("Delete session", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(RC.text)
+                            .frame(width: 36, height: 36)
+                            .background(RC.surface2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
@@ -113,5 +134,19 @@ struct PostSessionView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .alert("Rename session", isPresented: $showRename) {
+            TextField("Title", text: $draftTitle)
+            Button("Save") {
+                let t = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty { session.title = t; try? context.save() }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func deleteSession() {
+        context.delete(session)
+        try? context.save()
+        router.popToRoot()
     }
 }

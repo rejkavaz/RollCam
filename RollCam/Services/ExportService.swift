@@ -9,9 +9,10 @@ enum ExportService {
         var rows = ["time_s,bpm,zone,zone_name"]
         let n = max(1, s.series.count)
         let spacing = Double(s.durationSeconds) / Double(n)
+        let mh = Double(s.maxHR)
         for (i, v) in s.series.enumerated() {
             let t = Int(Double(i) * spacing)
-            let z = HRZone.index(v)
+            let z = HRZone.index(v, max: mh)
             rows.append("\(t),\(Int(v.rounded())),\(z + 1),\(HRZone.name(z))")
         }
         let csv = rows.joined(separator: "\n")

@@ -208,8 +208,9 @@ struct LiveRecordingView: View {
         let series = hr.series
         hr.stop()
         let duration = max(secs, 1)
-        let m = SessionAnalytics.metrics(series: series, durationSeconds: duration)
-        let pressure = SessionAnalytics.detectPressure(series: series, durationSeconds: duration, rounds: rounds)
+        let maxHR = settings.maxHR
+        let m = SessionAnalytics.metrics(series: series, durationSeconds: duration, maxHR: maxHR)
+        let pressure = SessionAnalytics.detectPressure(series: series, durationSeconds: duration, rounds: rounds, maxHR: maxHR)
         let curves = SessionAnalytics.roundCurves(series: series, rounds: rounds)
 
         let session = Session(
@@ -218,6 +219,7 @@ struct LiveRecordingView: View {
             durationSeconds: duration,
             rounds: rounds,
             peak: m.peak, avg: m.avg, recovery: m.recovery, zone4Minutes: m.zone4Minutes,
+            maxHR: maxHR,
             dist: m.dist,
             series: series,
             noteTags: [],

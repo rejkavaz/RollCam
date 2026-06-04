@@ -16,23 +16,24 @@ enum SessionAnalytics {
     }
 
     /// Derive a session's summary metrics from its HR samples.
-    /// `sampleSpacing` is the seconds represented by each sample.
-    static func metrics(series: [Double], durationSeconds: Int) -> Metrics {
+    /// `maxHR` sets the athlete's zone thresholds.
+    static func metrics(series: [Double], durationSeconds: Int, maxHR: Int = 195) -> Metrics {
         guard !series.isEmpty else {
             return Metrics(peak: 0, avg: 0, recovery: 0, zone4Minutes: 0, dist: [0, 0, 0, 0, 0])
         }
+        let mh = Double(maxHR)
         let peak = Int(series.max() ?? 0)
         let avg = Int((series.reduce(0, +) / Double(series.count)).rounded())
 
         // Time-in-zone distribution (5 buckets), as integer percentages.
         var counts = [Int](repeating: 0, count: 5)
-        for v in series { counts[HRZone.index(v)] += 1 }
+        for v in series { counts[HRZone.index(v, max: mh)] += 1 }
         let total = max(1, series.count)
         let dist = counts.map { Int((Double($0) / Double(total) * 100).rounded()) }
 
         // Zone 4+ minutes.
         let secondsPerSample = Double(durationSeconds) / Double(series.count)
-        let z4samples = series.filter { HRZone.index($0) >= 3 }.count
+        let z4samples = series.filter { HRZone.index($0, max: mh) >= 3 }.count
         let zone4Minutes = Int((Double(z4samples) * secondsPerSample / 60).rounded())
 
         // Recovery proxy: average drop over the steepest sustained descent.
@@ -87,15 +88,16 @@ enum SessionAnalytics {
     // MARK: Pressure moments (HR spikes) — rule-based, no ML
 
     /// Detect sharp upward HR excursions and label them by approximate round/time.
-    static func detectPressure(series: [Double], durationSeconds: Int, rounds: Int) -> [PressureMoment] {
+    static func detectPressure(series: [Double], durationSeconds: Int, rounds: Int, maxHR: Int = 195) -> [PressureMoment] {
         guard series.count > 6 else { return [] }
         let look = max(2, series.count / 20)
+        let floor = Double(maxHR) * 0.82   // ~Zone-4 threshold for "under pressure"
         var moments: [PressureMoment] = []
         var i = look
         while i < series.count - 1 {
             let rise = series[i] - series[i - look]
             let isLocalHigh = series[i] >= series[i - 1] && series[i] >= series[min(series.count - 1, i + 1)]
-            if rise >= 12 && series[i] >= 175 && isLocalHigh {
+            if rise >= 12 && series[i] >= floor && isLocalHigh {
                 let pos = Double(i) / Double(series.count - 1)
                 let secs = Int(pos * Double(durationSeconds))
                 let round = min(rounds, Int(pos * Double(rounds)) + 1)
@@ -123,7 +125,7 @@ enum SessionAnalytics {
         let peakSecs = Int(peakPos * Double(s.durationSeconds))
         let peakRound = min(s.rounds, Int(peakPos * Double(s.rounds)) + 1)
 
-        let threshold = 160.0
+        let threshold = (Double(s.maxHR) * 0.82).rounded()   // Zone-4 threshold
         let aboveCount = s.series.filter { $0 >= threshold }.count
         let abovePct = Int((Double(aboveCount) / Double(n) * 100).rounded())
 

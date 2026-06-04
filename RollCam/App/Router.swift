@@ -27,10 +27,29 @@ final class Router {
 }
 
 // App-wide preferences (no AI, no account, all local).
+// Persisted to UserDefaults so they survive relaunch.
 @Observable
 final class AppSettings {
-    var voiceCountdown: Bool = true
-    var blurFaces: Bool = true
-    var hrSource: HRSourceKind = .simulated
-    var maxHR: Int = 195
+    var voiceCountdown: Bool { didSet { store.set(voiceCountdown, forKey: Keys.voiceCountdown) } }
+    var blurFaces: Bool { didSet { store.set(blurFaces, forKey: Keys.blurFaces) } }
+    var hrSource: HRSourceKind { didSet { store.set(hrSource.rawValue, forKey: Keys.hrSource) } }
+    var maxHR: Int { didSet { store.set(maxHR, forKey: Keys.maxHR) } }
+
+    @ObservationIgnored private let store = UserDefaults.standard
+
+    private enum Keys {
+        static let voiceCountdown = "settings.voiceCountdown"
+        static let blurFaces = "settings.blurFaces"
+        static let hrSource = "settings.hrSource"
+        static let maxHR = "settings.maxHR"
+    }
+
+    init() {
+        // `object(forKey:)` lets us distinguish "never set" from "set to false".
+        voiceCountdown = store.object(forKey: Keys.voiceCountdown) as? Bool ?? true
+        blurFaces = store.object(forKey: Keys.blurFaces) as? Bool ?? true
+        hrSource = HRSourceKind(rawValue: store.string(forKey: Keys.hrSource) ?? "") ?? .simulated
+        let savedMax = store.integer(forKey: Keys.maxHR)
+        maxHR = savedMax == 0 ? 195 : savedMax
+    }
 }

@@ -45,6 +45,7 @@ final class Session {
     var avg: Int
     var recovery: Int          // bpm/min, negative = drop between rounds
     var zone4Minutes: Int
+    var maxHR: Int = 195       // athlete's max HR used for this session's zone math
 
     var dist: [Int]            // time-in-zone distribution, 5 buckets
     var series: [Double]       // whole-session HR samples
@@ -67,6 +68,7 @@ final class Session {
         avg: Int,
         recovery: Int,
         zone4Minutes: Int,
+        maxHR: Int = 195,
         dist: [Int],
         series: [Double],
         noteTags: [String] = [],
@@ -86,6 +88,7 @@ final class Session {
         self.avg = avg
         self.recovery = recovery
         self.zone4Minutes = zone4Minutes
+        self.maxHR = maxHR
         self.dist = dist
         self.series = series
         self.noteTags = noteTags

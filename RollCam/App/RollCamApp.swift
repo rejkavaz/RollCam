@@ -60,6 +60,7 @@ struct RollCamApp: App {
                 .environment(hr)
                 .preferredColorScheme(.dark)
                 .tint(RC.hr)
+                .onAppear { hr.kind = settings.hrSource }
         }
         .modelContainer(container)
     }

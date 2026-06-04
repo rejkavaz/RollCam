@@ -3,6 +3,7 @@ import SwiftData
 
 struct LibraryView: View {
     @Environment(Router.self) private var router
+    @Environment(\.modelContext) private var context
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
     @State private var filter = "All"
 
@@ -53,6 +54,11 @@ struct LibraryView: View {
                                 SessionCard(s: s) {
                                     router.push(.post(id: s.id, fresh: false))
                                 }
+                                .contextMenu {
+                                    Button(role: .destructive) { delete(s) } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                     }
@@ -62,6 +68,11 @@ struct LibraryView: View {
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private func delete(_ s: Session) {
+        context.delete(s)
+        try? context.save()
     }
 
     private var emptyState: some View {
