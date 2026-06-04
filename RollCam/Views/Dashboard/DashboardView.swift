@@ -22,21 +22,27 @@ struct DashboardView: View {
     }
     private var zone4Total: Int { scope.reduce(0) { $0 + $1.zone4Minutes } }
 
-    // Fitness trend: lower resting-effort proxy = fitter. Deterministic synthetic curve.
+    // Fitness trend: each session's average HR over time (oldest -> newest).
+    // Lower average effort for similar work = fitter. Real data, no synthesis.
     private var trend: [Double] {
-        genSeries(48, base: 150, amp: 60, seed: 41).enumerated().map { i, _ in
-            150 - (Double(i) / 48) * 55 + sin(Double(i) / 4) * 6
-        }
+        sessions.reversed().map { Double($0.avg) }
     }
-    // Rolling weekly load: minutes-in-zone weighted per session, last 7 buckets.
+    // Rolling load: training load per session (mat minutes + Zone 4+ minutes),
+    // most recent sessions, oldest -> newest.
     private var load: [Double] {
-        let recent = Array(sessions.prefix(7).reversed())
-        let vals = recent.map { Double($0.durationSeconds) / 60 + Double($0.zone4Minutes) }
-        return vals.isEmpty ? [40, 62, 50, 80, 70, 95, 60] : vals
+        Array(sessions.prefix(7).reversed())
+            .map { Double($0.durationSeconds) / 60 + Double($0.zone4Minutes) }
     }
     private var loadScore: Int { Int(load.reduce(0, +).rounded()) }
 
     private var bests: [(String, String, String)] {
+        guard !sessions.isEmpty else {
+            return [
+                ("PR peak HR", "—", "flame.fill"),
+                ("Fastest recovery", "—", "arrow.down"),
+                ("Most Zone 4+", "—", "trophy.fill"),
+            ]
+        }
         let peak = sessions.map(\.peak).max() ?? 0
         let recovery = sessions.map(\.recovery).min() ?? 0
         let z4 = sessions.map(\.zone4Minutes).max() ?? 0
@@ -75,18 +81,24 @@ struct DashboardView: View {
                         HStack {
                             Eyebrow("Fitness trend")
                             Spacer()
-                            Text("lower = fitter").font(RC.mono(10)).foregroundStyle(RC.good)
+                            Text("avg HR per session").font(RC.mono(10)).foregroundStyle(RC.good)
                         }
                         .padding(.bottom, 12)
-                        HRGraph(series: trend, minY: 85, maxY: 160,
-                                stroke: RC.good, area: RC.good, grid: false)
-                            .frame(height: 84)
-                        HStack {
-                            Text("12 wks ago").font(RC.mono(9.5)).foregroundStyle(RC.text3)
-                            Spacer()
-                            Text("now").font(RC.mono(9.5)).foregroundStyle(RC.text3)
+                        if trend.count > 1 {
+                            HRGraph(series: trend, minY: 120, maxY: 200,
+                                    stroke: RC.good, area: RC.good, grid: false)
+                                .frame(height: 84)
+                            HStack {
+                                Text("oldest").font(RC.mono(9.5)).foregroundStyle(RC.text3)
+                                Spacer()
+                                Text("now").font(RC.mono(9.5)).foregroundStyle(RC.text3)
+                            }
+                            .padding(.top, 8)
+                        } else {
+                            Text("Record a few sessions to see your trend.")
+                                .font(.system(size: 13)).foregroundStyle(RC.text3)
+                                .frame(maxWidth: .infinity, minHeight: 84, alignment: .center)
                         }
-                        .padding(.top, 8)
                     }
                     .rcCard(16)
 
@@ -94,15 +106,20 @@ struct DashboardView: View {
                     HStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 12) {
                             Eyebrow("Rolling load")
-                            LoadBars(vals: load)
+                            if load.isEmpty {
+                                Text("No sessions yet").font(.system(size: 13)).foregroundStyle(RC.text3)
+                                    .frame(height: 46)
+                            } else {
+                                LoadBars(vals: load)
+                            }
                         }
                         VStack(alignment: .trailing, spacing: 4) {
                             Text("\(loadScore)").font(RC.mono(28, .semibold)).foregroundStyle(RC.text)
-                            Text("Optimal")
+                            Text("\(load.count) session\(load.count == 1 ? "" : "s")")
                                 .font(RC.mono(10.5))
-                                .foregroundStyle(RC.good)
+                                .foregroundStyle(RC.text3)
                                 .padding(.vertical, 3).padding(.horizontal, 10)
-                                .overlay(Capsule().strokeBorder(RC.good.opacity(0.3), lineWidth: 1))
+                                .overlay(Capsule().strokeBorder(RC.line2, lineWidth: 1))
                         }
                     }
                     .rcCard(16)

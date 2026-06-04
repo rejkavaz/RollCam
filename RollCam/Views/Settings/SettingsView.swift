@@ -19,16 +19,32 @@ struct SettingsView: View {
                             SegmentOption(value: $0.rawValue, label: $0.label.uppercased())
                         }, selection: Binding(
                             get: { settings.hrSource.rawValue },
-                            set: { settings.hrSource = HRSourceKind(rawValue: $0) ?? .simulated; hr.kind = settings.hrSource }))
+                            set: {
+                                settings.hrSource = HRSourceKind(rawValue: $0) ?? .simulated
+                                hr.kind = settings.hrSource
+                                // Drop any live connection when switching sources.
+                                hr.disconnect()
+                            }))
                         HStack(spacing: 11) {
                             Image(systemName: "wave.3.right").font(.system(size: 17)).foregroundStyle(RC.z1)
                             Text(hr.deviceName ?? "No strap linked").font(.system(size: 13)).foregroundStyle(RC.text)
                             Spacer()
-                            Text(hr.isConnected ? "connected" : "idle")
+                            Text(hr.isConnected ? "connected · \(hr.bpm) bpm" : "idle")
                                 .font(RC.mono(10.5)).foregroundStyle(hr.isConnected ? RC.good : RC.text3)
                         }
                         .rcCard2(14)
-                        Text("Works with any standard Bluetooth chest strap (Polar H10, Wahoo TICKR, Garmin HRM) exposing the 0x180D heart-rate service. No account, no pairing code.")
+
+                        if settings.hrSource == .bluetooth {
+                            Button {
+                                hr.isConnected ? hr.disconnect() : hr.connect()
+                            } label: {
+                                Label(hr.isConnected ? "Disconnect strap" : "Scan for strap",
+                                      systemImage: hr.isConnected ? "xmark.circle" : "antenna.radiowaves.left.and.right")
+                            }
+                            .buttonStyle(RCButtonStyle(kind: hr.isConnected ? .soft : .primary))
+                        }
+
+                        Text("Works with any standard Bluetooth chest strap (Polar H10, Wahoo TICKR, Garmin HRM) exposing the 0x180D heart-rate service. No account, no pairing code. Pair here, then the strap is used automatically while you record.")
                             .font(.system(size: 12)).foregroundStyle(RC.text3).lineSpacing(3)
                     }
 

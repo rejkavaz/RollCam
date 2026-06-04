@@ -35,6 +35,21 @@ struct RollCamApp: App {
                 }
             }
         }
+
+        // One-time cleanup: earlier builds seeded demo sessions on first launch.
+        // Wipe them once so upgraded installs start from a clean, empty library.
+        // Runs exactly once (guarded by a flag) — real recordings are never touched.
+        Self.purgeLegacySeedIfNeeded(in: container.mainContext)
+    }
+
+    private static func purgeLegacySeedIfNeeded(in context: ModelContext) {
+        let key = "didPurgeLegacySeed.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        if let existing = try? context.fetch(FetchDescriptor<Session>()) {
+            for s in existing { context.delete(s) }
+            try? context.save()
+        }
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     var body: some Scene {
@@ -45,7 +60,6 @@ struct RollCamApp: App {
                 .environment(hr)
                 .preferredColorScheme(.dark)
                 .tint(RC.hr)
-                .onAppear { SampleData.seedIfNeeded(into: container.mainContext) }
         }
         .modelContainer(container)
     }

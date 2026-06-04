@@ -82,13 +82,15 @@ struct TimerSetupView: View {
                     }
                     .rcCard(16)
 
-                    // BLE device row
+                    // HR source row
                     HStack(spacing: 11) {
                         Image(systemName: "wave.3.right").font(.system(size: 17)).foregroundStyle(RC.z1)
-                        Text(hr.deviceName ?? (settings.hrSource == .bluetooth ? "Searching…" : "Simulated source"))
+                        Text(hr.deviceName ?? (settings.hrSource == .bluetooth ? "No strap linked" : "Simulated source"))
                             .font(.system(size: 13)).foregroundStyle(RC.text)
                         Spacer()
-                        Text(hr.isConnected ? "connected" : "tap Start to link")
+                        Text(hr.isConnected
+                             ? "connected"
+                             : (settings.hrSource == .bluetooth ? "pair in Settings" : "ready"))
                             .font(RC.mono(10.5))
                             .foregroundStyle(hr.isConnected ? RC.good : RC.text3)
                     }

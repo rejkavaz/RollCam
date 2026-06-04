@@ -44,14 +44,44 @@ enum SessionAnalytics {
     /// Fastest sustained HR drop, expressed as bpm/min (negative number).
     private static func recoveryRate(series: [Double], secondsPerSample: Double) -> Int {
         guard series.count > 4 else { return 0 }
-        let window = max(2, Int(60 / max(1, secondsPerSample)))   // ~1 minute
+        // ~1 minute of samples, but never wider than the series itself — otherwise
+        // `series.count - window` goes negative and `0..<negative` traps at runtime
+        // (this was the crash when stopping a short recording).
+        let window = min(series.count - 1, max(2, Int(60 / max(1, secondsPerSample))))
+        guard window >= 1, series.count - window > 0 else { return 0 }
         var best = 0.0
         for i in 0..<(series.count - window) {
             let drop = series[i] - series[i + window]
             if drop > best { best = drop }
         }
         let perMinute = best / (Double(window) * secondsPerSample / 60)
+        guard perMinute.isFinite else { return 0 }
         return -Int(perMinute.rounded())
+    }
+
+    // MARK: Per-round curves (for the Round Compare overlay)
+
+    /// Slice the recorded series into `rounds` contiguous segments so each round's
+    /// HR curve can be overlaid. Purely a reshape of the real samples — no synthesis.
+    static func roundCurves(series: [Double], rounds: Int) -> [RoundCurve] {
+        guard rounds > 1, series.count >= rounds * 2 else { return [] }
+        // Cool -> hot legend colours, reused cyclically if there are many rounds.
+        let palette: [UInt32] = [0xFF4B3A, 0xF3F5F9, 0x6EA8FF, 0x6BE08F, 0xE0B15A, 0x626B7B]
+        let per = series.count / rounds
+        var out: [RoundCurve] = []
+        for r in 0..<rounds {
+            let lo = r * per
+            let hi = (r == rounds - 1) ? series.count : (r + 1) * per
+            let slice = Array(series[lo..<hi])
+            guard !slice.isEmpty else { continue }
+            out.append(RoundCurve(
+                label: "R\(r + 1)",
+                peak: Int(slice.max() ?? 0),
+                series: slice,
+                colorHex: palette[r % palette.count]
+            ))
+        }
+        return out
     }
 
     // MARK: Pressure moments (HR spikes) — rule-based, no ML

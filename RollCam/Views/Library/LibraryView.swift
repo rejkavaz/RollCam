@@ -31,45 +31,28 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                RCHeader(title: "Rolls", eyebrow: totalLabel, large: true) {
-                    IconButton(systemName: "magnifyingglass")
-                    IconButton(systemName: "line.3.horizontal.decrease")
-                }
+                RCHeader(title: "Rolls", eyebrow: totalLabel, large: true)
 
                 VStack(alignment: .leading, spacing: 16) {
-                    // Smart saved query (deterministic filter, no AI).
-                    HStack(spacing: 11) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 17))
-                            .foregroundStyle(RC.text3)
-                        (Text("bad position").foregroundStyle(RC.text).font(RC.mono(13))
-                         + Text(" · above ").foregroundStyle(RC.text2)
-                         + Text("170 bpm").foregroundStyle(RC.hr).font(RC.mono(13)))
-                            .font(.system(size: 13))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 15))
-                            .foregroundStyle(RC.text3)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 13)
-                    .background(RC.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(chips, id: \.self) { c in
-                                Chip(label: c, selected: filter == c) { filter = c }
+                    if sessions.isEmpty {
+                        emptyState
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(chips, id: \.self) { c in
+                                    Chip(label: c, selected: filter == c) { filter = c }
+                                }
                             }
                         }
-                    }
-                    .scrollClipDisabled()
+                        .scrollClipDisabled()
 
-                    Eyebrow("\(filtered.count) sessions")
+                        Eyebrow("\(filtered.count) session\(filtered.count == 1 ? "" : "s")")
 
-                    LazyVStack(spacing: 12) {
-                        ForEach(filtered) { s in
-                            SessionCard(s: s) {
-                                router.push(.post(id: s.id, fresh: false))
+                        LazyVStack(spacing: 12) {
+                            ForEach(filtered) { s in
+                                SessionCard(s: s) {
+                                    router.push(.post(id: s.id, fresh: false))
+                                }
                             }
                         }
                     }
@@ -79,6 +62,30 @@ struct LibraryView: View {
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "video.badge.plus")
+                .font(.system(size: 40))
+                .foregroundStyle(RC.hr)
+            Text("No rolls yet")
+                .font(RC.display(20, .semibold))
+                .foregroundStyle(RC.text)
+            Text("Tap the record button to film your first roll with a live heart-rate overlay. Your sessions show up here.")
+                .font(.system(size: 13))
+                .foregroundStyle(RC.text3)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .padding(.horizontal, 24)
+            Button { router.push(.timer) } label: {
+                Label("Record a roll", systemImage: "video.fill")
+            }
+            .buttonStyle(RCButtonStyle(kind: .hr))
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }
 

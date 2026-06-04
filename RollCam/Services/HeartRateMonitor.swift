@@ -17,46 +17,70 @@ enum HRSourceKind: String, CaseIterable, Identifiable {
 
 @Observable
 final class HeartRateMonitor {
-    var bpm: Int = 172
-    var series: [Double] = []
+    var bpm: Int = 0
+    var series: [Double] = []        // the live capture buffer for the current recording
     var isConnected: Bool = false
     var deviceName: String?
     var kind: HRSourceKind = .simulated
 
-    private let windowLength = 48
-    private var base: Double = 172
-    private var current: Double = 172
+    // Cap the capture buffer generously so a very long session can't grow without
+    // bound, while still keeping full resolution for any normal-length roll.
+    private let maxSamples = 12_000
+    private var base: Double = 178
+    private var current: Double = 178
     private var timer: Timer?
     private var ble: BLEHeartRateClient?
 
-    init() {
-        series = (0..<windowLength).map { i in
-            base + sin(Double(i) / 5) * 11 + Double.random(in: -3...3)
-        }
-    }
+    init() {}
 
-    // MARK: Control
+    // MARK: Live connection (used by Settings to pair / preview before recording)
 
-    func start(base: Double = 172) {
-        self.base = base
-        self.current = base
+    /// Begin streaming from the selected source without clearing a recording.
+    func connect() {
         switch kind {
         case .simulated: startSimulated()
-        case .bluetooth: startBluetooth()
+        case .bluetooth: if ble == nil { startBluetooth() }
         }
     }
 
+    /// Fully release the source and any paired strap.
+    func disconnect() {
+        timer?.invalidate(); timer = nil
+        ble?.stop(); ble = nil
+        isConnected = false
+        deviceName = nil
+        bpm = 0
+    }
+
+    // MARK: Recording control
+
+    /// Start (or continue) a live source and reset the capture buffer so the saved
+    /// series contains only samples from this recording.
+    func start(base: Double = 178) {
+        self.base = base
+        self.current = base
+        series = []
+        switch kind {
+        case .simulated:
+            ble?.stop(); ble = nil
+            startSimulated()
+        case .bluetooth:
+            timer?.invalidate(); timer = nil
+            if ble == nil { startBluetooth() }   // reuse a strap already paired in Settings
+        }
+    }
+
+    /// End the recording. A simulated source is stopped; a real strap is left
+    /// connected so it's ready for the next recording (use `disconnect()` to release).
     func stop() {
         timer?.invalidate(); timer = nil
-        ble?.stop()
-        isConnected = false
     }
 
     func push(_ value: Double) {
-        let v = min(198, max(120, value))
+        let v = min(220, max(40, value))
         bpm = Int(v.rounded())
         series.append(v)
-        if series.count > windowLength { series.removeFirst(series.count - windowLength) }
+        if series.count > maxSamples { series.removeFirst(series.count - maxSamples) }
     }
 
     // MARK: Simulated
@@ -64,6 +88,8 @@ final class HeartRateMonitor {
     private func startSimulated() {
         isConnected = true
         deviceName = "Simulated"
+        current = base
+        bpm = Int(base.rounded())
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.9, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -81,6 +107,7 @@ final class HeartRateMonitor {
         client.onState = { [weak self] name, connected in
             self?.deviceName = name
             self?.isConnected = connected
+            if !connected { self?.bpm = 0 }
         }
         client.start()
         ble = client

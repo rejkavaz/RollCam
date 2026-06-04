@@ -210,6 +210,7 @@ struct LiveRecordingView: View {
         let duration = max(secs, 1)
         let m = SessionAnalytics.metrics(series: series, durationSeconds: duration)
         let pressure = SessionAnalytics.detectPressure(series: series, durationSeconds: duration, rounds: rounds)
+        let curves = SessionAnalytics.roundCurves(series: series, rounds: rounds)
 
         let session = Session(
             title: "New Roll",
@@ -220,6 +221,7 @@ struct LiveRecordingView: View {
             dist: m.dist,
             series: series,
             noteTags: [],
+            roundCurves: curves,
             pressure: pressure,
             videoPath: camera.lastRecordingURL?.path
         )
