@@ -204,32 +204,57 @@ struct LiveRecordingView: View {
     }
 
     private func stop() {
-        camera.stopRecording()
+        // Snapshot HR before tearing the source down.
         let series = hr.series
         hr.stop()
         let duration = max(secs, 1)
         let maxHR = settings.maxHR
-        let m = SessionAnalytics.metrics(series: series, durationSeconds: duration, maxHR: maxHR)
-        let pressure = SessionAnalytics.detectPressure(series: series, durationSeconds: duration, rounds: rounds, maxHR: maxHR)
-        let curves = SessionAnalytics.roundCurves(series: series, rounds: rounds)
+        let sessionID = UUID()
 
-        let session = Session(
-            title: "New Roll",
-            date: Date(),
-            durationSeconds: duration,
-            rounds: rounds,
-            peak: m.peak, avg: m.avg, recovery: m.recovery, zone4Minutes: m.zone4Minutes,
-            maxHR: maxHR,
-            dist: m.dist,
-            series: series,
-            noteTags: [],
-            roundCurves: curves,
-            pressure: pressure,
-            videoPath: camera.lastRecordingURL?.path
-        )
-        context.insert(session)
-        try? context.save()
-        router.reset(to: .post(id: session.id, fresh: true))
+        // Wait for the movie file to finish writing, then persist it and save.
+        camera.finishRecording { url in
+            let savedPath = url.flatMap { Self.persistVideo($0, id: sessionID) }
+            let m = SessionAnalytics.metrics(series: series, durationSeconds: duration, maxHR: maxHR)
+            let pressure = SessionAnalytics.detectPressure(series: series, durationSeconds: duration, rounds: rounds, maxHR: maxHR)
+            let curves = SessionAnalytics.roundCurves(series: series, rounds: rounds)
+
+            let session = Session(
+                id: sessionID,
+                title: "New Roll",
+                date: Date(),
+                durationSeconds: duration,
+                rounds: rounds,
+                peak: m.peak, avg: m.avg, recovery: m.recovery, zone4Minutes: m.zone4Minutes,
+                maxHR: maxHR,
+                dist: m.dist,
+                series: series,
+                noteTags: [],
+                roundCurves: curves,
+                pressure: pressure,
+                videoPath: savedPath
+            )
+            context.insert(session)
+            try? context.save()
+            router.reset(to: .post(id: session.id, fresh: true))
+        }
+    }
+
+    /// Move the just-recorded clip out of the purgeable temp dir into
+    /// Application Support so it survives for later review. Returns the saved path.
+    private static func persistVideo(_ src: URL, id: UUID) -> String? {
+        let fm = FileManager.default
+        guard let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                        appropriateFor: nil, create: true) else { return src.path }
+        let dir = support.appendingPathComponent("Videos", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dst = dir.appendingPathComponent("\(id.uuidString).mov")
+        try? fm.removeItem(at: dst)
+        do {
+            try fm.moveItem(at: src, to: dst)
+            return dst.path
+        } catch {
+            return src.path
+        }
     }
 }
 

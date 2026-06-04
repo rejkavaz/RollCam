@@ -71,6 +71,7 @@ struct LibraryView: View {
     }
 
     private func delete(_ s: Session) {
+        if let path = s.videoPath { try? FileManager.default.removeItem(atPath: path) }
         context.delete(s)
         try? context.save()
     }

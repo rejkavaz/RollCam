@@ -9,6 +9,7 @@ struct PostSessionView: View {
 
     @State private var showRename = false
     @State private var draftTitle = ""
+    @State private var video = VideoController()
 
     private var breakdown: String { SessionAnalytics.breakdown(for: session) }
 
@@ -42,6 +43,8 @@ struct PostSessionView: View {
                     Text(session.title).font(RC.display(30, .bold)).foregroundStyle(RC.text)
                     Text("\(session.rounds) rounds · \(session.durationLabel) mat time")
                         .font(RC.mono(12)).foregroundStyle(RC.text3)
+
+                    if video.hasVideo { videoCard }
 
                     // HR graph
                     VStack(spacing: 0) {
@@ -134,6 +137,8 @@ struct PostSessionView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .onAppear { video.load(path: session.videoPath) }
+        .onDisappear { video.pause() }
         .alert("Rename session", isPresented: $showRename) {
             TextField("Title", text: $draftTitle)
             Button("Save") {
@@ -144,7 +149,26 @@ struct PostSessionView: View {
         }
     }
 
+    private var videoCard: some View {
+        ZStack {
+            VideoLayerView(player: video.player)
+            Button { video.togglePlay() } label: {
+                Circle().fill(.black.opacity(0.4)).frame(width: 54, height: 54)
+                    .overlay(Image(systemName: video.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 21)).foregroundStyle(.white))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(height: 200)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
+    }
+
     private func deleteSession() {
+        video.pause()
+        if let path = session.videoPath { try? FileManager.default.removeItem(atPath: path) }
         context.delete(session)
         try? context.save()
         router.popToRoot()

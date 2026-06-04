@@ -20,10 +20,14 @@ final class CameraController {
         DispatchQueue.main.async {
             self?.isRecording = false
             if let url { self?.lastRecordingURL = url }
+            let completion = self?.finishCompletion
+            self?.finishCompletion = nil
+            completion?(url)
         }
     }
     @ObservationIgnored private var videoInput: AVCaptureDeviceInput?
     @ObservationIgnored private var configured = false
+    @ObservationIgnored private var finishCompletion: ((URL?) -> Void)?
 
     // MARK: Lifecycle
 
@@ -115,6 +119,18 @@ final class CameraController {
 
     func stopRecording() {
         guard movieOutput.isRecording else { return }
+        movieOutput.stopRecording()
+    }
+
+    /// Stop recording and call `completion` once the file is fully written.
+    /// If nothing was recording (e.g. Simulator), completion fires immediately
+    /// with whatever URL we have (usually nil) so the session still saves.
+    func finishRecording(_ completion: @escaping (URL?) -> Void) {
+        guard movieOutput.isRecording else {
+            completion(lastRecordingURL)
+            return
+        }
+        finishCompletion = completion
         movieOutput.stopRecording()
     }
 }

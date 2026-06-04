@@ -7,6 +7,7 @@ struct ReviewTagView: View {
     @Environment(\.modelContext) private var context
 
     @State private var ph: Double = 0.46
+    @State private var video = VideoController()
 
     private let tagOptions: [(String, String)] = [
         ("Submission", "figure.martial.arts"),
@@ -44,19 +45,34 @@ struct ReviewTagView: View {
         }
         .scrollIndicators(.hidden)
         .ignoresSafeArea(edges: .top)
+        .onAppear { video.load(path: session.videoPath) }
+        .onDisappear { video.pause() }
+        .onChange(of: video.progress) { _, newValue in
+            if video.isPlaying { ph = newValue }
+        }
     }
 
     // MARK: Player
 
     private var player: some View {
         ZStack {
-            RadialGradient(colors: [Color(hex: 0x283041), Color(hex: 0x0B0E13)],
-                           center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 300)
-            Circle()
-                .fill(.white.opacity(0.16))
-                .frame(width: 56, height: 56)
-                .overlay(Image(systemName: "play.fill").font(.system(size: 22)).foregroundStyle(.white))
-                .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            if video.hasVideo {
+                VideoLayerView(player: video.player).ignoresSafeArea()
+            } else {
+                RadialGradient(colors: [Color(hex: 0x283041), Color(hex: 0x0B0E13)],
+                               center: UnitPoint(x: 0.5, y: 0.4), startRadius: 0, endRadius: 300)
+            }
+            Button { video.togglePlay() } label: {
+                Circle()
+                    .fill(.black.opacity(0.4))
+                    .frame(width: 56, height: 56)
+                    .overlay(Image(systemName: video.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22)).foregroundStyle(.white))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .opacity(video.hasVideo ? 1 : 0.5)
+            .disabled(!video.hasVideo)
 
             VStack {
                 HStack {
@@ -99,7 +115,9 @@ struct ReviewTagView: View {
                         markers: session.tagged.map(\.pos), playhead: ph)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { v in
+                        video.pause()
                         ph = min(1, max(0, v.location.x / geo.size.width))
+                        video.seek(toFraction: ph)
                     })
             }
             .frame(height: 78)
