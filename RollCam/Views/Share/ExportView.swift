@@ -10,6 +10,9 @@ struct ExportView: View {
     @State private var layout = "side"
     @State private var shareURL: URL?
     @State private var showShare = false
+    @State private var rendering = false
+    @State private var renderProgress = 0.0
+    @State private var errorMessage: String?
 
     private let styles: [(id: String, name: String, desc: String)] = [
         ("minimal", "Minimal", "HR number only"),
@@ -105,15 +108,22 @@ struct ExportView: View {
                     }
                     .rcCard2(14)
 
-                    Button { exportCSV() } label: {
-                        Label("Export clip", systemImage: "arrow.down.circle").font(.system(size: 15))
+                    Button { exportVideo() } label: {
+                        if rendering {
+                            Label("Rendering · \(Int(renderProgress * 100))%", systemImage: "gearshape.2")
+                                .font(.system(size: 15))
+                        } else {
+                            Label(session.videoPath == nil ? "No video to render" : "Export clip",
+                                  systemImage: "arrow.down.circle").font(.system(size: 15))
+                        }
                     }
                     .buttonStyle(RCButtonStyle(kind: .hr))
+                    .disabled(rendering || session.videoPath == nil)
 
                     HStack(spacing: 8) {
                         Spacer()
                         ForEach(["Save", "Instagram", "WhatsApp", "CSV"], id: \.self) { d in
-                            Button { if d == "CSV" { exportCSV() } } label: {
+                            Button { if d == "CSV" { exportCSV() } else { exportVideo() } } label: {
                                 Text(d).font(RC.mono(11)).foregroundStyle(RC.text2)
                                     .padding(.vertical, 7).padding(.horizontal, 13)
                                     .overlay(Capsule().strokeBorder(RC.line2, lineWidth: 1))
@@ -131,12 +141,37 @@ struct ExportView: View {
         .sheet(isPresented: $showShare) {
             if let shareURL { ShareSheet(items: [shareURL]) }
         }
+        .alert("Export failed", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     private func exportCSV() {
         if let url = ExportService.writeCSV(for: session) {
             shareURL = url
             showShare = true
+        }
+    }
+
+    private func exportVideo() {
+        guard !rendering, session.videoPath != nil else { return }
+        rendering = true
+        renderProgress = 0
+        ExportService.renderClip(for: session, style: style, blurFaces: settings.blurFaces) { p in
+            renderProgress = p
+        } completion: { result in
+            rendering = false
+            switch result {
+            case .success(let url):
+                shareURL = url
+                showShare = true
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }

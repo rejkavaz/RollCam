@@ -47,6 +47,8 @@ struct LiveRecordingView: View {
             orientationToggle
             zoneStrip
 
+            if camera.permissionDenied { permissionBanner }
+
             if landscape {
                 HStack {
                     VStack { Spacer(); HRChip(bpm: hr.bpm, series: hr.series, zone: zone, maxHR: settings.maxHR, compact: true) }
@@ -117,6 +119,38 @@ struct LiveRecordingView: View {
             .padding(.horizontal, 18)
             .padding(.top, 58)
             Spacer()
+        }
+    }
+
+    // Camera access denied — the roll still records HR + timer, but we nudge
+    // the athlete to Settings so they can film the next one.
+    private var permissionBanner: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 12) {
+                Image(systemName: "video.slash.fill").font(.system(size: 18)).foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Camera access off").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    Text("HR + timer still record. Enable the camera to film.")
+                        .font(RC.mono(10)).foregroundStyle(.white.opacity(0.7))
+                }
+                Spacer()
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text("Settings").font(RC.mono(11, .semibold)).foregroundStyle(.black)
+                        .padding(.vertical, 7).padding(.horizontal, 12)
+                        .background(.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
+            .padding(.horizontal, 18)
+            .padding(.bottom, 150)
         }
     }
 

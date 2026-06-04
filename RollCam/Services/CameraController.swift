@@ -12,6 +12,9 @@ final class CameraController {
     var isRecording = false
     var lastRecordingURL: URL?
     var usingFrontCamera = false
+    // True when the user has denied (or restricted) camera access — the view
+    // uses this to guide them to Settings instead of silently falling back.
+    var permissionDenied = false
 
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private let movieOutput = AVCaptureMovieFileOutput()
@@ -39,10 +42,11 @@ final class CameraController {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 if granted { self?.configure() }
+                else { DispatchQueue.main.async { self?.permissionDenied = true } }
             }
         default:
-            // Denied / restricted — stay in fallback mode.
-            break
+            // Denied / restricted — surface a prompt to open Settings.
+            DispatchQueue.main.async { self.permissionDenied = true }
         }
     }
 
