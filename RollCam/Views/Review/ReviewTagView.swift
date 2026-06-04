@@ -95,8 +95,8 @@ struct ReviewTagView: View {
                 Text("drag the line").font(RC.mono(10)).foregroundStyle(RC.text3)
             }
             GeometryReader { geo in
-                HRGraph(series: session.series, playhead: ph,
-                        markers: session.tagged.map(\.pos), grid: false)
+                HRGraph(series: session.series, grid: false,
+                        markers: session.tagged.map(\.pos), playhead: ph)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { v in
                         ph = min(1, max(0, v.location.x / geo.size.width))
