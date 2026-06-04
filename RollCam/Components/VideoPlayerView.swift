@@ -25,6 +25,11 @@ final class VideoController {
         url = newURL
         hasVideo = true
 
+        // Recording left the shared audio session in record mode; switch it
+        // back to playback so the clip's audio is audible.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
         let item = AVPlayerItem(url: newURL)
         player.replaceCurrentItem(with: item)
         player.isMuted = false

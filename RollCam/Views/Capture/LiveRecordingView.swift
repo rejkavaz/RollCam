@@ -74,9 +74,11 @@ struct LiveRecordingView: View {
         .navigationBarBackButtonHidden(true)
         .onAppear {
             camera.configureIfNeeded()
+            // Request recording now; CameraController starts it as soon as the
+            // session finishes its asynchronous configuration.
+            camera.startRecording()
             hr.start(base: 178)
             announcer.enabled = settings.voiceCountdown
-            if camera.isAvailable { camera.startRecording() }
         }
         .onDisappear {
             hr.stop()

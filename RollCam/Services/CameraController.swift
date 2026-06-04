@@ -31,6 +31,9 @@ final class CameraController {
     @ObservationIgnored private var videoInput: AVCaptureDeviceInput?
     @ObservationIgnored private var configured = false
     @ObservationIgnored private var finishCompletion: ((URL?) -> Void)?
+    // Recording can be requested before the capture session finishes its async
+    // configuration. We remember the intent and start as soon as it's ready.
+    @ObservationIgnored private var wantsRecording = false
 
     // MARK: Lifecycle
 
@@ -77,8 +80,13 @@ final class CameraController {
 
             self.session.commitConfiguration()
             self.configured = true
-            DispatchQueue.main.async { self.isAvailable = true }
             self.session.startRunning()
+            DispatchQueue.main.async {
+                self.isAvailable = true
+                // If the recording screen asked to record before we were ready,
+                // honour that intent now that the session is live.
+                if self.wantsRecording { self.startRecording() }
+            }
         }
     }
 
@@ -114,7 +122,10 @@ final class CameraController {
     // MARK: Recording
 
     func startRecording() {
-        guard isAvailable, !movieOutput.isRecording else { return }
+        // Not configured yet — remember the intent; configure() will start us.
+        guard isAvailable else { wantsRecording = true; return }
+        guard !movieOutput.isRecording else { return }
+        wantsRecording = false
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("roll-\(Int(Date().timeIntervalSince1970)).mov")
         movieOutput.startRecording(to: url, recordingDelegate: recordingDelegate)
