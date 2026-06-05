@@ -55,6 +55,9 @@ final class CameraController {
             }
         })
     @ObservationIgnored private var videoInput: AVCaptureDeviceInput?
+    // Lens the session should configure on first. Set via configureIfNeeded(front:)
+    // before the async configure() runs.
+    @ObservationIgnored private var desiredPosition: AVCaptureDevice.Position = .back
     @ObservationIgnored private var configured = false
     @ObservationIgnored private var finishCompletion: ((URL?) -> Void)?
     // Recording can be requested before the capture session finishes its async
@@ -67,8 +70,11 @@ final class CameraController {
 
     // MARK: Lifecycle
 
-    func configureIfNeeded() {
+    func configureIfNeeded(front: Bool = false) {
         guard !configured else { return }
+        desiredPosition = front ? .front : .back
+        // Keep the flip bookkeeping in sync so the Flip button heads the other way.
+        usingFrontCamera = front
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             configure()
@@ -89,7 +95,10 @@ final class CameraController {
             self.session.beginConfiguration()
             self.session.sessionPreset = .high
 
-            guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            // Fall back to the back lens if the requested position is unavailable.
+            let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: self.desiredPosition)
+                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+            guard let camera,
                   let input = try? AVCaptureDeviceInput(device: camera),
                   self.session.canAddInput(input) else {
                 self.session.commitConfiguration()

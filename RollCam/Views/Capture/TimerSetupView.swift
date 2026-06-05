@@ -71,6 +71,23 @@ struct TimerSetupView: View {
                     }
                     .rcCard(16)
 
+                    // Camera lens picker — remembered as the default launch lens.
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Camera").font(.system(size: 15, weight: .semibold)).foregroundStyle(RC.text)
+                            Text("flip anytime while recording").font(RC.mono(10.5)).foregroundStyle(RC.text3)
+                        }
+                        Spacer()
+                        Segmented(options: [
+                            SegmentOption(value: "rear", label: "REAR"),
+                            SegmentOption(value: "front", label: "FRONT"),
+                        ], selection: Binding(
+                            get: { settings.frontCamera ? "front" : "rear" },
+                            set: { settings.frontCamera = $0 == "front" }))
+                        .frame(width: 168)
+                    }
+                    .rcCard(16)
+
                     // Voice countdown toggle
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {

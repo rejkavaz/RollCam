@@ -34,6 +34,9 @@ final class AppSettings {
     var blurFaces: Bool { didSet { store.set(blurFaces, forKey: Keys.blurFaces) } }
     var hrSource: HRSourceKind { didSet { store.set(hrSource.rawValue, forKey: Keys.hrSource) } }
     var maxHR: Int { didSet { store.set(maxHR, forKey: Keys.maxHR) } }
+    // Preferred lens to launch the recorder on; the Flip button still overrides
+    // it mid-roll. Remembered so the athlete's usual angle is the default.
+    var frontCamera: Bool { didSet { store.set(frontCamera, forKey: Keys.frontCamera) } }
 
     @ObservationIgnored private let store = UserDefaults.standard
 
@@ -42,6 +45,7 @@ final class AppSettings {
         static let blurFaces = "settings.blurFaces"
         static let hrSource = "settings.hrSource"
         static let maxHR = "settings.maxHR"
+        static let frontCamera = "settings.frontCamera"
     }
 
     init() {
@@ -51,5 +55,6 @@ final class AppSettings {
         hrSource = HRSourceKind(rawValue: store.string(forKey: Keys.hrSource) ?? "") ?? .simulated
         let savedMax = store.integer(forKey: Keys.maxHR)
         maxHR = savedMax == 0 ? 195 : savedMax
+        frontCamera = store.object(forKey: Keys.frontCamera) as? Bool ?? false
     }
 }

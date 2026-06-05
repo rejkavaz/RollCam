@@ -17,6 +17,21 @@ struct LiveRecordingView: View {
     @State private var paused = false
     @State private var secs = 0
     @State private var capturedSeries: [Double] = []
+    // Action markers dropped live while filming. Each captures the elapsed
+    // second, label, SF Symbol and the bpm at that instant — converted to
+    // TagMarkers on Stop so they flow straight into Review & Tag.
+    @State private var liveTags: [LiveTag] = []
+    @State private var toast: String?
+    @State private var toastID = 0
+
+    // Same vocabulary as Review & Tag so live and post tags stay consistent.
+    private let actionTags: [(String, String)] = [
+        ("Submission", "figure.martial.arts"),
+        ("Sweep", "arrow.triangle.2.circlepath"),
+        ("Bad pos", "shield"),
+        ("Scramble", "bolt.fill"),
+        ("Tap", "checkmark"),
+    ]
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -61,19 +76,23 @@ struct LiveRecordingView: View {
                     }
                     .padding(.trailing, 22)
                 }
+                VStack { Spacer(); tagBar.padding(.bottom, 18) }
             } else {
                 VStack {
                     HStack { Spacer(); HRChip(bpm: hr.bpm, series: hr.series, zone: zone, maxHR: settings.maxHR) }
                         .padding(.trailing, 18).padding(.top, 168)
                     Spacer()
+                    tagBar.padding(.bottom, 14)
                     controls.padding(.bottom, 46)
                 }
             }
+
+            toastOverlay
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .onAppear {
-            camera.configureIfNeeded()
+            camera.configureIfNeeded(front: settings.frontCamera)
             // Request recording now; CameraController starts it as soon as the
             // session finishes its asynchronous configuration.
             camera.startRecording()
@@ -199,6 +218,63 @@ struct LiveRecordingView: View {
         }
     }
 
+    // MARK: Live action tagging
+
+    // A row of quick-tap action buttons. Each drops a timestamped marker at the
+    // current moment so the athlete can flag sweeps, taps, submissions etc. while
+    // they roll — these surface later in Review & Tag.
+    private var tagBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(actionTags, id: \.0) { tag, icon in
+                    Button { addLiveTag(tag, symbol: icon) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+                            Text(tag.uppercased()).font(RC.mono(10, .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.vertical, 9).padding(.horizontal, 13)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 18)
+        }
+    }
+
+    // A brief confirmation pill that floats near the top when a tag is dropped.
+    private var toastOverlay: some View {
+        VStack {
+            if let toast {
+                HStack(spacing: 8) {
+                    Image(systemName: "tag.fill").font(.system(size: 13)).foregroundStyle(RC.hr)
+                    Text(toast).font(RC.mono(12, .semibold)).foregroundStyle(.white)
+                }
+                .padding(.vertical, 9).padding(.horizontal, 14)
+                .background(.black.opacity(0.72), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
+                .padding(.top, 150)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            Spacer()
+        }
+        .allowsHitTesting(false)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: toast)
+    }
+
+    private func addLiveTag(_ tag: String, symbol: String) {
+        liveTags.append(LiveTag(t: secs, tag: tag, symbol: symbol, bpm: hr.bpm))
+        toastID += 1
+        let thisToast = toastID
+        toast = "\(tag) · \(Session.clock(secs))"
+        // Auto-dismiss unless a newer tag has since replaced it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            if toastID == thisToast { toast = nil }
+        }
+    }
+
     private var stopButton: some View {
         Button { stop() } label: {
             VStack(spacing: 7) {
@@ -247,6 +323,18 @@ struct LiveRecordingView: View {
         let maxHR = settings.maxHR
         let sessionID = UUID()
 
+        // Convert the live action taps into post-review markers, positioned along
+        // the HR series by their elapsed time.
+        let markers: [TagMarker] = liveTags
+            .map { lt in
+                TagMarker(timeLabel: Session.clock(min(lt.t, duration)),
+                          tag: lt.tag, symbol: lt.symbol, bpm: lt.bpm,
+                          pos: min(1, Double(lt.t) / Double(duration)))
+            }
+            .sorted { $0.pos < $1.pos }
+        var seen = Set<String>()
+        let liveNoteTags = markers.map(\.tag).filter { seen.insert($0).inserted }
+
         // Wait for the movie file to finish writing, then persist it and save.
         camera.finishRecording { url in
             let savedPath = url.flatMap { Self.persistVideo($0, id: sessionID) }
@@ -264,7 +352,8 @@ struct LiveRecordingView: View {
                 maxHR: maxHR,
                 dist: m.dist,
                 series: series,
-                noteTags: [],
+                noteTags: liveNoteTags,
+                tagged: markers,
                 roundCurves: curves,
                 pressure: pressure,
                 videoPath: savedPath
@@ -298,6 +387,15 @@ struct LiveRecordingView: View {
             return src.path
         }
     }
+}
+
+// A marker captured live during recording, before it's positioned along the
+// HR series and stored as a TagMarker on Stop.
+private struct LiveTag {
+    var t: Int          // elapsed seconds when tapped
+    var tag: String
+    var symbol: String
+    var bpm: Int
 }
 
 // MARK: - Floating HR chip
