@@ -624,17 +624,18 @@ enum ExportService {
     }
 
     /// A big numeral that animates live through the HR `series`, synced to
-    /// playback. Uses a discrete keyframe animation on the text layer's `string`
-    /// so the burned-in number ticks through the athlete's actual bpm over the
-    /// clip's duration — matching the dot riding the graph curve.
+    /// playback. AVVideoCompositionCoreAnimationTool does NOT honour a keyframe
+    /// animation on a CATextLayer's `string` in an offline render (the number
+    /// stays frozen on the burned-in video even though it ticks correctly during
+    /// live recording). The reliable approach is to pre-render each bpm value to
+    /// an image and animate a plain CALayer's `contents` with discrete keyframes
+    /// — `contents` IS honoured offline. The cadence matches the dot riding the
+    /// graph curve so the number and dot move together.
     private static func liveNumber(series: [Double], fallback: Int, fontSize: CGFloat,
                                    weight: UIFont.Weight, color: UIColor,
                                    align: NSTextAlignment = .left, frame: CGRect,
-                                   duration: Double) -> CATextLayer {
-        let layer = text("\(fallback)", fontSize: fontSize, weight: weight, rounded: true,
-                         color: color, align: align, frame: frame)
-        guard series.count > 1, duration > 0.05 else { return layer }
-
+                                   duration: Double) -> CALayer {
+        // Rounded system face, matching the rest of the big numerals.
         let font: UIFont
         if let d = UIFont.systemFont(ofSize: fontSize, weight: weight).fontDescriptor.withDesign(.rounded) {
             font = UIFont(descriptor: d, size: fontSize)
@@ -644,23 +645,55 @@ enum ExportService {
         let para = NSMutableParagraphStyle()
         para.alignment = align
 
-        // Cap the number of discrete steps so we don't build thousands of
-        // attributed strings for long clips; the eye can't track faster anyway.
-        let maxSteps = 240
-        let count = min(series.count, maxSteps)
-        var values: [NSAttributedString] = []
-        var keyTimes: [NSNumber] = []
-        for step in 0..<count {
-            let idx = series.count == 1 ? 0
-                : Int((Double(step) / Double(count - 1)) * Double(series.count - 1))
-            let bpm = Int(series[idx].rounded())
-            values.append(NSAttributedString(string: "\(bpm)", attributes: [
-                .font: font, .foregroundColor: color, .paragraphStyle: para,
-            ]))
-            keyTimes.append(NSNumber(value: count == 1 ? 0 : Double(step) / Double(count - 1)))
+        let lineH = fontSize * 1.3
+        let imgSize = CGSize(width: max(1, frame.width), height: lineH)
+        let fmt = UIGraphicsImageRendererFormat.default()
+        fmt.opaque = false
+        fmt.scale = 3
+        let renderer = UIGraphicsImageRenderer(size: imgSize, format: fmt)
+
+        // Render one bpm value to a CGImage, cached by integer value so a long
+        // clip that revisits the same bpm doesn't re-rasterise it.
+        var cache: [Int: CGImage] = [:]
+        func image(_ bpm: Int) -> CGImage? {
+            if let cached = cache[bpm] { return cached }
+            let img = renderer.image { _ in
+                let attr = NSAttributedString(string: "\(bpm)", attributes: [
+                    .font: font, .foregroundColor: color, .paragraphStyle: para,
+                ])
+                // Vertically centre the glyphs within the line box; paragraph
+                // alignment handles horizontal placement across the full width.
+                let textH = attr.size().height
+                attr.draw(in: CGRect(x: 0, y: (lineH - textH) / 2, width: imgSize.width, height: textH))
+            }
+            let cg = img.cgImage
+            if let cg { cache[bpm] = cg }
+            return cg
         }
 
-        let anim = CAKeyframeAnimation(keyPath: "string")
+        let layer = CALayer()
+        layer.contentsScale = 3
+        layer.frame = CGRect(x: frame.minX, y: frame.midY - lineH / 2, width: frame.width, height: lineH)
+        layer.contents = image(fallback)
+
+        guard series.count > 1, duration > 0.05 else { return layer }
+
+        // Cap the number of discrete steps so we don't rasterise thousands of
+        // frames for a long clip; the eye can't track faster anyway.
+        let maxSteps = 240
+        let count = min(series.count, maxSteps)
+        var values: [CGImage] = []
+        var keyTimes: [NSNumber] = []
+        for step in 0..<count {
+            let idx = Int((Double(step) / Double(count - 1)) * Double(series.count - 1))
+            let bpm = Int(series[idx].rounded())
+            guard let cg = image(bpm) else { continue }
+            values.append(cg)
+            keyTimes.append(NSNumber(value: Double(step) / Double(count - 1)))
+        }
+        guard values.count > 1 else { return layer }
+
+        let anim = CAKeyframeAnimation(keyPath: "contents")
         anim.values = values
         anim.keyTimes = keyTimes
         anim.calculationMode = .discrete
@@ -670,7 +703,7 @@ enum ExportService {
         anim.fillMode = .both
         layer.add(anim, forKey: "live")
         // Seed the first frame so the very first composited frame isn't the peak.
-        layer.string = values.first
+        layer.contents = values.first
         return layer
     }
 
