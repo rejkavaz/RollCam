@@ -21,22 +21,49 @@ final class CameraController {
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private let movieOutput = AVCaptureMovieFileOutput()
     @ObservationIgnored private let queue = DispatchQueue(label: "com.rejkavaz.RollCam.camera")
-    @ObservationIgnored private lazy var recordingDelegate = RecordingDelegate { [weak self] url, err in
-        DispatchQueue.main.async {
-            self?.isRecording = false
-            if let url { self?.lastRecordingURL = url }
-            self?.lastError = err
-            let completion = self?.finishCompletion
-            self?.finishCompletion = nil
-            completion?(url)
-        }
-    }
+    @ObservationIgnored private lazy var recordingDelegate = RecordingDelegate(
+        onStart: { [weak self] in
+            // Recording genuinely started — clear any retry bookkeeping.
+            DispatchQueue.main.async {
+                self?.isRecording = true
+                self?.lastError = nil
+                self?.startRetries = 0
+            }
+        },
+        onFinish: { [weak self] url, err in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRecording = false
+                if let url { self.lastRecordingURL = url }
+                self.lastError = err
+                // A session config change (-11805) — typically the preview layer
+                // attaching the instant we began — can kill a recording before
+                // any frames land. If nobody is awaiting a deliberate stop and we
+                // still want to film, retry once the session has settled.
+                if self.finishCompletion == nil, url == nil, self.shouldRecord,
+                   self.startRetries < 3 {
+                    self.startRetries += 1
+                    self.wantsRecording = true
+                    self.queue.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        self?.beginRecordingIfReady()
+                    }
+                    return
+                }
+                let completion = self.finishCompletion
+                self.finishCompletion = nil
+                completion?(url)
+            }
+        })
     @ObservationIgnored private var videoInput: AVCaptureDeviceInput?
     @ObservationIgnored private var configured = false
     @ObservationIgnored private var finishCompletion: ((URL?) -> Void)?
     // Recording can be requested before the capture session finishes its async
     // configuration. We remember the intent and start as soon as it's ready.
     @ObservationIgnored private var wantsRecording = false
+    // True from the moment the screen asks to record until it deliberately
+    // stops — gates the auto-retry so we don't restart after a normal stop.
+    @ObservationIgnored private var shouldRecord = false
+    @ObservationIgnored private var startRetries = 0
 
     // MARK: Lifecycle
 
@@ -128,7 +155,9 @@ final class CameraController {
     func startRecording() {
         // Record the intent and try to begin on the session queue. If the
         // capture session isn't running yet, configure() will retry once live.
+        shouldRecord = true
         wantsRecording = true
+        startRetries = 0
         queue.async { [weak self] in self?.beginRecordingIfReady() }
     }
 
@@ -145,14 +174,13 @@ final class CameraController {
         wantsRecording = false
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("roll-\(Int(Date().timeIntervalSince1970)).mov")
+        // isRecording / error state is updated from the delegate's didStart /
+        // didFinish callbacks so it reflects what AVFoundation actually did.
         movieOutput.startRecording(to: url, recordingDelegate: recordingDelegate)
-        DispatchQueue.main.async {
-            self.isRecording = true
-            self.lastError = nil
-        }
     }
 
     func stopRecording() {
+        shouldRecord = false
         wantsRecording = false
         queue.async { [weak self] in
             guard let self, self.movieOutput.isRecording else { return }
@@ -164,6 +192,8 @@ final class CameraController {
     /// If nothing was recording (e.g. Simulator), completion fires immediately
     /// with whatever URL we have (usually nil) so the session still saves.
     func finishRecording(_ completion: @escaping (URL?) -> Void) {
+        shouldRecord = false
+        wantsRecording = false
         queue.async { [weak self] in
             guard let self else { DispatchQueue.main.async { completion(nil) }; return }
             if self.movieOutput.isRecording {
@@ -179,8 +209,17 @@ final class CameraController {
 
 // AVCaptureFileOutputRecordingDelegate must live on an NSObject.
 final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
+    private let onStart: () -> Void
     private let onFinish: (URL?, String?) -> Void
-    init(onFinish: @escaping (URL?, String?) -> Void) { self.onFinish = onFinish }
+    init(onStart: @escaping () -> Void, onFinish: @escaping (URL?, String?) -> Void) {
+        self.onStart = onStart
+        self.onFinish = onFinish
+    }
+
+    func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo fileURL: URL,
+                    from connections: [AVCaptureConnection]) {
+        onStart()
+    }
 
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
                     from connections: [AVCaptureConnection], error: Error?) {
