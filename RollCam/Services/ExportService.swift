@@ -268,44 +268,57 @@ enum ExportService {
 
     private static func buildCoach(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
                                    pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
-        let cw = unit * 0.46, ch = unit * 0.205
+        let cw = unit * 0.44, ch = unit * 0.225
         let x0 = w - cw - pad
         let chip = card(CGRect(x: x0, y: h - ch - pad, width: cw, height: ch),
-                        radius: ch * 0.22, fill: .black, alpha: 0.5,
+                        radius: ch * 0.20, fill: .black, alpha: 0.5,
                         border: UIColor.white.withAlphaComponent(0.16))
         layer.addSublayer(chip)
 
-        let inset = ch * 0.22
-        // Top row: heart dot + peak bpm + zone pill.
-        let dotR = ch * 0.07
+        let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
+        let insetX = ch * 0.22
+        let insetY = ch * 0.18
+
+        // Two clean horizontal bands inside the chip (origin bottom-left):
+        // a number row up top, a caption row underneath.
+        let captionH = ch * 0.20
+        let gap = ch * 0.07
+        let numRowH = ch - insetY * 2 - captionH - gap
+        let numRowY = insetY + captionH + gap   // bottom edge of the number row
+
+        // Heart dot, vertically centred on the number row.
+        let dotR = numRowH * 0.15
         let dot = CALayer()
-        dot.frame = CGRect(x: inset, y: ch * 0.56, width: dotR * 2, height: dotR * 2)
+        dot.frame = CGRect(x: insetX, y: numRowY + numRowH / 2 - dotR, width: dotR * 2, height: dotR * 2)
         dot.cornerRadius = dotR
         dot.backgroundColor = zone.cgColor
         dot.shadowColor = zone.cgColor; dot.shadowRadius = dotR * 1.6
         dot.shadowOpacity = 0.9; dot.shadowOffset = .zero
         chip.addSublayer(dot)
 
-        chip.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: ch * 0.34,
-                                    weight: .bold, color: .white,
-                                    frame: CGRect(x: inset + dotR * 2 + ch * 0.12,
-                                                  y: ch * 0.46, width: cw * 0.5, height: ch * 0.4),
-                                    duration: duration))
-        // Zone pill.
-        let pillW = unit * 0.115, pillH = ch * 0.30
-        let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
-        let pill = card(CGRect(x: x0 + cw - pillW - inset, y: h - ch - pad + ch * 0.52,
-                               width: pillW, height: pillH),
-                        radius: pillH * 0.5, fill: zone, alpha: 0.92, border: nil, shadow: false)
-        layer.addSublayer(pill)
-        pill.addSublayer(text("Z\(zi + 1)", fontSize: pillH * 0.5, weight: .heavy, mono: true,
+        // Zone pill on the right, vertically centred on the number row.
+        let pillH = numRowH * 0.64, pillW = unit * 0.105
+        let pillX = cw - insetX - pillW
+        let pill = card(CGRect(x: pillX, y: numRowY + numRowH / 2 - pillH / 2, width: pillW, height: pillH),
+                        radius: pillH * 0.5, fill: zone, alpha: 0.95, border: nil, shadow: false)
+        chip.addSublayer(pill)
+        pill.addSublayer(text("Z\(zi + 1)", fontSize: pillH * 0.46, weight: .heavy, mono: true,
                               color: .white, align: .center,
                               frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
 
+        // Big live number, filling the space between the dot and the pill.
+        let numX = insetX + dotR * 2 + ch * 0.10
+        chip.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: numRowH * 0.86,
+                                    weight: .bold, color: .white,
+                                    frame: CGRect(x: numX, y: numRowY,
+                                                  width: pillX - numX - ch * 0.08, height: numRowH),
+                                    duration: duration))
+
+        // Caption row.
         chip.addSublayer(text("AVG \(snap.avg) · \(HRZone.name(zi).uppercased())",
-                              fontSize: ch * 0.13, weight: .medium, mono: true,
-                              color: UIColor.white.withAlphaComponent(0.7), tracking: ch * 0.012,
-                              frame: CGRect(x: inset, y: ch * 0.16, width: cw - inset * 2, height: ch * 0.22)))
+                              fontSize: captionH * 0.66, weight: .medium, mono: true,
+                              color: UIColor.white.withAlphaComponent(0.7), tracking: captionH * 0.03,
+                              frame: CGRect(x: insetX, y: insetY, width: cw - insetX * 2, height: captionH)))
     }
 
     // MARK: Cinematic — full-frame scrims, a glowing HR ribbon + a bottom lockup.
@@ -356,51 +369,69 @@ enum ExportService {
 
     private static func buildData(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
                                   pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
-        let barH = max(h * 0.2, unit * 0.22)
+        let barH = max(h * 0.16, unit * 0.2)
         let bar = CALayer()
         bar.frame = CGRect(x: 0, y: 0, width: w, height: barH)
         bar.backgroundColor = UIColor.black.withAlphaComponent(0.6).cgColor
         layer.addSublayer(bar)
         // Accent hairline along the top edge of the bar.
+        let hairH = max(1.5, unit * 0.003)
         let hair = CALayer()
-        hair.frame = CGRect(x: 0, y: barH - max(1.5, unit * 0.003), width: w, height: max(1.5, unit * 0.003))
+        hair.frame = CGRect(x: 0, y: barH - hairH, width: w, height: hairH)
         hair.backgroundColor = zone.withAlphaComponent(0.85).cgColor
         layer.addSublayer(hair)
 
-        // Left stat column.
         let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
-        bar.addSublayer(text("LIVE HEART RATE", fontSize: barH * 0.1, weight: .semibold, mono: true,
-                             color: UIColor.white.withAlphaComponent(0.55), tracking: barH * 0.01,
-                             frame: CGRect(x: pad, y: barH * 0.66, width: w * 0.34, height: barH * 0.16)))
-        bar.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: barH * 0.42,
-                                   weight: .bold, color: .white,
-                                   frame: CGRect(x: pad, y: barH * 0.26, width: w * 0.28, height: barH * 0.44),
-                                   duration: duration))
-        bar.addSublayer(text("PEAK \(snap.peak) · AVG \(snap.avg) BPM", fontSize: barH * 0.1, weight: .medium, mono: true,
-                             color: zone, tracking: barH * 0.008,
-                             frame: CGRect(x: pad, y: barH * 0.1, width: w * 0.4, height: barH * 0.16)))
+        let insetY = barH * 0.16
 
-        // Zone pill.
-        let pillW = unit * 0.16, pillH = barH * 0.2
-        let pill = card(CGRect(x: pad + unit * 0.16, y: barH * 0.5, width: pillW, height: pillH),
-                        radius: pillH * 0.5, fill: zone, alpha: 0.92, border: nil, shadow: false)
-        layer.addSublayer(pill)
+        // Three stacked rows in the left column (origin bottom-left): caption
+        // label on top, the big live number in the middle, a sub-line beneath.
+        let labelH = barH * 0.13
+        let subH = barH * 0.13
+        let gap = barH * 0.05
+        let numH = barH - insetY * 2 - labelH - subH - gap * 2
+        let numY = insetY + subH + gap
+        let labelY = numY + numH + gap
+
+        bar.addSublayer(text("LIVE HEART RATE", fontSize: labelH * 0.78, weight: .semibold, mono: true,
+                             color: UIColor.white.withAlphaComponent(0.55), tracking: labelH * 0.06,
+                             frame: CGRect(x: pad, y: labelY, width: w * 0.4, height: labelH)))
+
+        // Big number + zone pill, inline on the number row.
+        let numFont = numH * 0.92
+        let numW = numFont * 1.7
+        bar.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: numFont,
+                                   weight: .bold, color: .white,
+                                   frame: CGRect(x: pad, y: numY, width: numW, height: numH),
+                                   duration: duration))
+        let pillH = numH * 0.5, pillW = unit * 0.165
+        let pill = card(CGRect(x: pad + numW + pad * 0.4, y: numY + numH / 2 - pillH / 2,
+                               width: pillW, height: pillH),
+                        radius: pillH * 0.5, fill: zone, alpha: 0.95, border: nil, shadow: false)
+        bar.addSublayer(pill)
         pill.addSublayer(text("Z\(zi + 1) · \(HRZone.name(zi).uppercased())", fontSize: pillH * 0.42,
                               weight: .bold, mono: true, color: .white, align: .center,
                               frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
 
-        // HR graph on the right.
-        let gx = w * 0.4
-        let gRect = CGRect(x: gx, y: barH * 0.28, width: w - gx - pad, height: barH * 0.46)
+        bar.addSublayer(text("PEAK \(snap.peak) · AVG \(snap.avg) BPM", fontSize: subH * 0.82, weight: .medium, mono: true,
+                             color: zone, tracking: subH * 0.04,
+                             frame: CGRect(x: pad, y: insetY, width: w * 0.48, height: subH)))
+
+        // HR graph on the right half, with a time axis beneath it.
+        let gx = w * 0.52
+        let gRight = w - pad
+        let axisH = barH * 0.12
+        let gRect = CGRect(x: gx, y: insetY + axisH + gap, width: gRight - gx,
+                           height: barH - insetY * 2 - axisH - gap)
         layer.addSublayer(graphLayer(rect: gRect, series: snap.series, color: zone,
                                      lineWidth: max(2, unit * 0.004), fill: true, dot: true,
                                      duration: duration))
-        bar.addSublayer(text("0:00", fontSize: barH * 0.08, weight: .regular, mono: true,
+        bar.addSublayer(text("0:00", fontSize: axisH * 0.78, weight: .regular, mono: true,
                              color: UIColor.white.withAlphaComponent(0.5),
-                             frame: CGRect(x: gx, y: barH * 0.1, width: w * 0.2, height: barH * 0.14)))
-        bar.addSublayer(text(clock(snap.durationSeconds), fontSize: barH * 0.08, weight: .regular, mono: true,
+                             frame: CGRect(x: gx, y: insetY, width: w * 0.2, height: axisH)))
+        bar.addSublayer(text(clock(snap.durationSeconds), fontSize: axisH * 0.78, weight: .regular, mono: true,
                              color: UIColor.white.withAlphaComponent(0.5), align: .right,
-                             frame: CGRect(x: w - pad - w * 0.2, y: barH * 0.1, width: w * 0.2, height: barH * 0.14)))
+                             frame: CGRect(x: gRight - w * 0.2, y: insetY, width: w * 0.2, height: axisH)))
     }
 
     // MARK: Reusable layer builders
