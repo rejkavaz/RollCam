@@ -118,6 +118,7 @@ final class CameraController {
             }
 
             self.session.commitConfiguration()
+            self.applyMirroring()
             self.configured = true
             // startRunning() blocks until the session is actually running, so
             // by the time it returns the capture connections are live and it's
@@ -156,7 +157,20 @@ final class CameraController {
                 self.session.addInput(current)
             }
             self.session.commitConfiguration()
+            self.applyMirroring()
         }
+    }
+
+    /// Mirror the recorded video when filming on the front lens so playback
+    /// matches the mirror-image preview the athlete saw while recording. The
+    /// rear lens is left un-mirrored (mirroring real-world footage looks wrong).
+    /// Must run on `queue`, where the capture graph is coherent.
+    private func applyMirroring() {
+        guard let conn = movieOutput.connection(with: .video),
+              conn.isVideoMirroringSupported else { return }
+        let isFront = videoInput?.device.position == .front
+        conn.automaticallyAdjustsVideoMirroring = false
+        conn.isVideoMirrored = isFront
     }
 
     // MARK: Recording
@@ -180,6 +194,7 @@ final class CameraController {
             DispatchQueue.main.async { self.lastError = "no video connection" }
             return
         }
+        applyMirroring()
         wantsRecording = false
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("roll-\(Int(Date().timeIntervalSince1970)).mov")
