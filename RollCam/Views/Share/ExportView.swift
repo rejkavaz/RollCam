@@ -189,9 +189,14 @@ struct ExportPreview: View {
 
     // Real series when we have one; otherwise a gentle wave just for the preview.
     private var previewSeries: [Double] {
-        session.series.count > 1
-            ? session.series
-            : (0..<44).map { 150 + 26 * sin(Double($0) / 5.0) + Double($0) * 0.5 }
+        if session.series.count > 1 { return session.series }
+        var wave: [Double] = []
+        for i in 0..<44 {
+            let t = Double(i)
+            let v: Double = 150.0 + 26.0 * sin(t / 5.0) + t * 0.5
+            wave.append(v)
+        }
+        return wave
     }
     private var lo: Double { (previewSeries.min() ?? 120) - 6 }
     private var hi: Double { (previewSeries.max() ?? 190) + 6 }
