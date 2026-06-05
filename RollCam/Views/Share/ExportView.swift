@@ -226,7 +226,7 @@ struct ExportPreview: View {
                 VStack(spacing: 1) {
                     Text("\(peak)").font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("♥ PEAK BPM").font(RC.mono(8, .semibold)).tracking(1).foregroundStyle(zClr)
+                    Text("♥ LIVE BPM").font(RC.mono(8, .semibold)).tracking(1).foregroundStyle(zClr)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 9)
                 .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -274,11 +274,11 @@ struct ExportPreview: View {
             VStack(alignment: .leading, spacing: 0) {
                 Spacer()
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("HEART RATE").font(RC.mono(7.5, .semibold)).tracking(1.2)
+                    Text("LIVE HEART RATE").font(RC.mono(7.5, .semibold)).tracking(1.2)
                         .foregroundStyle(.white.opacity(0.7))
                     Text("\(peak)").font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("PEAK · AVG \(avg) BPM").font(RC.mono(8, .semibold)).foregroundStyle(zClr)
+                    Text("PEAK \(peak) · AVG \(avg) BPM").font(RC.mono(8, .semibold)).foregroundStyle(zClr)
                 }
                 .padding(.leading, 14).padding(.bottom, 4)
                 ribbon.frame(height: 30)
@@ -292,10 +292,10 @@ struct ExportPreview: View {
             Spacer()
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("PEAK HR").font(RC.mono(7, .semibold)).foregroundStyle(.white.opacity(0.55))
+                    Text("LIVE HR").font(RC.mono(7, .semibold)).foregroundStyle(.white.opacity(0.55))
                     Text("\(peak)").font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("AVG \(avg) BPM").font(RC.mono(8, .medium)).foregroundStyle(zClr)
+                    Text("PEAK \(peak) · AVG \(avg) BPM").font(RC.mono(8, .medium)).foregroundStyle(zClr)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {

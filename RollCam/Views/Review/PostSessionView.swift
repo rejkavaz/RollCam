@@ -86,6 +86,7 @@ struct PostSessionView: View {
                                 .lineSpacing(4)
                                 .foregroundStyle(RC.text)
                         }
+                        .padding(.leading, 14)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Rectangle().fill(RC.hr).frame(width: 3).frame(maxHeight: .infinity)
                     }

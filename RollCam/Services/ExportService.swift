@@ -238,8 +238,8 @@ enum ExportService {
         let zone = zoneColor(snap.peak, snap.maxHR)
 
         switch style {
-        case "minimal": buildMinimal(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone)
-        case "coach":   buildCoach(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone)
+        case "minimal": buildMinimal(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
+        case "coach":   buildCoach(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         case "data":    buildData(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         default:        buildCinematic(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         }
@@ -248,17 +248,18 @@ enum ExportService {
     // MARK: Minimal — a single frosted HR chip, top-right.
 
     private static func buildMinimal(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
-                                     pad: CGFloat, snap: Snapshot, zone: UIColor) {
+                                     pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
         let cw = unit * 0.30, ch = unit * 0.165
         let chip = card(CGRect(x: w - cw - pad, y: h - ch - pad, width: cw, height: ch),
                         radius: ch * 0.26, fill: .black, alpha: 0.42,
                         border: UIColor.white.withAlphaComponent(0.18))
         layer.addSublayer(chip)
 
-        chip.addSublayer(text("\(snap.peak)", fontSize: ch * 0.5, weight: .bold, rounded: true,
-                              color: .white, align: .center,
-                              frame: CGRect(x: 0, y: ch * 0.32, width: cw, height: ch * 0.55)))
-        chip.addSublayer(text("♥ PEAK BPM", fontSize: ch * 0.14, weight: .semibold, mono: true,
+        chip.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: ch * 0.5,
+                                    weight: .bold, color: .white, align: .center,
+                                    frame: CGRect(x: 0, y: ch * 0.32, width: cw, height: ch * 0.55),
+                                    duration: duration))
+        chip.addSublayer(text("♥ LIVE BPM", fontSize: ch * 0.14, weight: .semibold, mono: true,
                               color: zone, tracking: ch * 0.02, align: .center,
                               frame: CGRect(x: 0, y: ch * 0.12, width: cw, height: ch * 0.2)))
     }
@@ -266,7 +267,7 @@ enum ExportService {
     // MARK: Coach — a richer badge with peak, zone pill and avg, top-right.
 
     private static func buildCoach(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
-                                   pad: CGFloat, snap: Snapshot, zone: UIColor) {
+                                   pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
         let cw = unit * 0.46, ch = unit * 0.205
         let x0 = w - cw - pad
         let chip = card(CGRect(x: x0, y: h - ch - pad, width: cw, height: ch),
@@ -285,9 +286,11 @@ enum ExportService {
         dot.shadowOpacity = 0.9; dot.shadowOffset = .zero
         chip.addSublayer(dot)
 
-        chip.addSublayer(text("\(snap.peak)", fontSize: ch * 0.34, weight: .bold, rounded: true,
-                              color: .white, frame: CGRect(x: inset + dotR * 2 + ch * 0.12,
-                                                           y: ch * 0.46, width: cw * 0.5, height: ch * 0.4)))
+        chip.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: ch * 0.34,
+                                    weight: .bold, color: .white,
+                                    frame: CGRect(x: inset + dotR * 2 + ch * 0.12,
+                                                  y: ch * 0.46, width: cw * 0.5, height: ch * 0.4),
+                                    duration: duration))
         // Zone pill.
         let pillW = unit * 0.115, pillH = ch * 0.30
         let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
@@ -335,13 +338,15 @@ enum ExportService {
         // Bottom-left lockup.
         let numH = unit * 0.105
         let numY = ribbonH + pad * 0.5
-        layer.addSublayer(text("\(snap.peak)", fontSize: numH, weight: .bold, rounded: true,
-                               color: .white, frame: CGRect(x: pad, y: numY, width: w * 0.7, height: numH)))
-        layer.addSublayer(text("PEAK · AVG \(snap.avg) BPM", fontSize: unit * 0.026, weight: .semibold,
+        layer.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: numH,
+                                     weight: .bold, color: .white,
+                                     frame: CGRect(x: pad, y: numY, width: w * 0.7, height: numH),
+                                     duration: duration))
+        layer.addSublayer(text("PEAK \(snap.peak) · AVG \(snap.avg) BPM", fontSize: unit * 0.026, weight: .semibold,
                                mono: true, color: zone, tracking: unit * 0.004,
                                frame: CGRect(x: pad + unit * 0.008, y: numY - unit * 0.034,
                                              width: w * 0.7, height: unit * 0.032)))
-        layer.addSublayer(text("HEART RATE", fontSize: unit * 0.024, weight: .semibold, mono: true,
+        layer.addSublayer(text("LIVE HEART RATE", fontSize: unit * 0.024, weight: .semibold, mono: true,
                                color: UIColor.white.withAlphaComponent(0.7), tracking: unit * 0.006,
                                frame: CGRect(x: pad + unit * 0.008, y: numY + numH - unit * 0.004,
                                              width: w * 0.7, height: unit * 0.03)))
@@ -364,14 +369,16 @@ enum ExportService {
 
         // Left stat column.
         let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
-        bar.addSublayer(text("PEAK HEART RATE", fontSize: barH * 0.1, weight: .semibold, mono: true,
+        bar.addSublayer(text("LIVE HEART RATE", fontSize: barH * 0.1, weight: .semibold, mono: true,
                              color: UIColor.white.withAlphaComponent(0.55), tracking: barH * 0.01,
                              frame: CGRect(x: pad, y: barH * 0.66, width: w * 0.34, height: barH * 0.16)))
-        bar.addSublayer(text("\(snap.peak)", fontSize: barH * 0.42, weight: .bold, rounded: true,
-                             color: .white, frame: CGRect(x: pad, y: barH * 0.26, width: w * 0.28, height: barH * 0.44)))
-        bar.addSublayer(text("AVG \(snap.avg) BPM", fontSize: barH * 0.1, weight: .medium, mono: true,
+        bar.addSublayer(liveNumber(series: snap.series, fallback: snap.peak, fontSize: barH * 0.42,
+                                   weight: .bold, color: .white,
+                                   frame: CGRect(x: pad, y: barH * 0.26, width: w * 0.28, height: barH * 0.44),
+                                   duration: duration))
+        bar.addSublayer(text("PEAK \(snap.peak) · AVG \(snap.avg) BPM", fontSize: barH * 0.1, weight: .medium, mono: true,
                              color: zone, tracking: barH * 0.008,
-                             frame: CGRect(x: pad, y: barH * 0.1, width: w * 0.34, height: barH * 0.16)))
+                             frame: CGRect(x: pad, y: barH * 0.1, width: w * 0.4, height: barH * 0.16)))
 
         // Zone pill.
         let pillW = unit * 0.16, pillH = barH * 0.2
@@ -483,9 +490,12 @@ enum ExportService {
             head.shadowRadius = r * 1.1
             head.shadowOpacity = 0.95
             head.shadowOffset = .zero
+            // Ride the curve on a uniform-time cadence (one data point per equal
+            // time slice) so the dot stays in lock-step with the live bpm number.
             let ride = CAKeyframeAnimation(keyPath: "position")
-            ride.path = line
-            ride.calculationMode = .paced
+            ride.values = (0..<n).map { NSValue(cgPoint: point($0)) }
+            ride.keyTimes = (0..<n).map { NSNumber(value: Double($0) / Double(n - 1)) }
+            ride.calculationMode = .linear
             ride.duration = max(0.1, duration)
             ride.beginTime = AVCoreAnimationBeginTimeAtZero
             ride.isRemovedOnCompletion = false
@@ -494,6 +504,57 @@ enum ExportService {
             container.addSublayer(head)
         }
         return container
+    }
+
+    /// A big numeral that animates live through the HR `series`, synced to
+    /// playback. Uses a discrete keyframe animation on the text layer's `string`
+    /// so the burned-in number ticks through the athlete's actual bpm over the
+    /// clip's duration — matching the dot riding the graph curve.
+    private static func liveNumber(series: [Double], fallback: Int, fontSize: CGFloat,
+                                   weight: UIFont.Weight, color: UIColor,
+                                   align: NSTextAlignment = .left, frame: CGRect,
+                                   duration: Double) -> CATextLayer {
+        let layer = text("\(fallback)", fontSize: fontSize, weight: weight, rounded: true,
+                         color: color, align: align, frame: frame)
+        guard series.count > 1, duration > 0.05 else { return layer }
+
+        let font: UIFont
+        if let d = UIFont.systemFont(ofSize: fontSize, weight: weight).fontDescriptor.withDesign(.rounded) {
+            font = UIFont(descriptor: d, size: fontSize)
+        } else {
+            font = .systemFont(ofSize: fontSize, weight: weight)
+        }
+        let para = NSMutableParagraphStyle()
+        para.alignment = align
+
+        // Cap the number of discrete steps so we don't build thousands of
+        // attributed strings for long clips; the eye can't track faster anyway.
+        let maxSteps = 240
+        let count = min(series.count, maxSteps)
+        var values: [NSAttributedString] = []
+        var keyTimes: [NSNumber] = []
+        for step in 0..<count {
+            let idx = series.count == 1 ? 0
+                : Int((Double(step) / Double(count - 1)) * Double(series.count - 1))
+            let bpm = Int(series[idx].rounded())
+            values.append(NSAttributedString(string: "\(bpm)", attributes: [
+                .font: font, .foregroundColor: color, .paragraphStyle: para,
+            ]))
+            keyTimes.append(NSNumber(value: count == 1 ? 0 : Double(step) / Double(count - 1)))
+        }
+
+        let anim = CAKeyframeAnimation(keyPath: "string")
+        anim.values = values
+        anim.keyTimes = keyTimes
+        anim.calculationMode = .discrete
+        anim.duration = duration
+        anim.beginTime = AVCoreAnimationBeginTimeAtZero
+        anim.isRemovedOnCompletion = false
+        anim.fillMode = .both
+        layer.add(anim, forKey: "live")
+        // Seed the first frame so the very first composited frame isn't the peak.
+        layer.string = values.first
+        return layer
     }
 
     /// A single line of text, vertically centred in `frame`. Defaults to the
