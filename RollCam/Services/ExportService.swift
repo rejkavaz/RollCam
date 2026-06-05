@@ -388,9 +388,9 @@ enum ExportService {
         let pill = card(CGRect(x: pillX, y: numRowY + numRowH / 2 - pillH / 2, width: pillW, height: pillH),
                         radius: pillH * 0.5, fill: zone, alpha: 0.95, border: nil, shadow: false)
         chip.addSublayer(pill)
-        pill.addSublayer(text("Z\(zi + 1)", fontSize: pillH * 0.46, weight: .heavy, mono: true,
-                              color: .white, align: .center,
-                              frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
+        pill.addSublayer(centeredText("Z\(zi + 1)",
+                              font: .monospacedSystemFont(ofSize: pillH * 0.46, weight: .heavy),
+                              color: .white, rect: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
 
         // Big live number, filling the space between the dot and the pill.
         let numX = insetX + dotR * 2 + ch * 0.10
@@ -490,14 +490,19 @@ enum ExportService {
                                    weight: .bold, color: .white,
                                    frame: CGRect(x: pad, y: numY, width: numW, height: numH),
                                    duration: duration))
-        let pillH = numH * 0.5, pillW = unit * 0.165
+        // Pill sized to fit its text (so longer zone names like THRESHOLD don't
+        // overflow a fixed width) and centred precisely within it.
+        let pillH = numH * 0.5
+        let pillLabel = "Z\(zi + 1) · \(HRZone.name(zi).uppercased())"
+        let pillFont = UIFont.monospacedSystemFont(ofSize: pillH * 0.42, weight: .bold)
+        let pillTrack = pillH * 0.42 * 0.02
+        let pillW = textWidth(pillLabel, font: pillFont, tracking: pillTrack) + pillH * 1.1
         let pill = card(CGRect(x: pad + numW + pad * 0.4, y: numY + numH / 2 - pillH / 2,
                                width: pillW, height: pillH),
                         radius: pillH * 0.5, fill: zone, alpha: 0.95, border: nil, shadow: false)
         bar.addSublayer(pill)
-        pill.addSublayer(text("Z\(zi + 1) · \(HRZone.name(zi).uppercased())", fontSize: pillH * 0.42,
-                              weight: .bold, mono: true, color: .white, align: .center,
-                              frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
+        pill.addSublayer(centeredText(pillLabel, font: pillFont, color: .white, tracking: pillTrack,
+                                      rect: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
 
         bar.addSublayer(text("PEAK \(snap.peak) · AVG \(snap.avg) BPM", fontSize: subH * 0.82, weight: .medium, mono: true,
                              color: zone, tracking: subH * 0.04,
@@ -705,6 +710,34 @@ enum ExportService {
         // Seed the first frame so the very first composited frame isn't the peak.
         layer.contents = values.first
         return layer
+    }
+
+    /// A single line of text centred BOTH ways inside `rect`, sized with true
+    /// font metrics. CATextLayer top-aligns its content, so the generic `text`
+    /// helper (which reserves a 1.3× line box) leaves short labels sitting a
+    /// touch high — most visible inside the small zone pill. Here we set the
+    /// layer height to the font's actual line height (ascender − descender) so
+    /// the glyphs fill the box and centring is exact.
+    private static func centeredText(_ string: String, font: UIFont, color: UIColor,
+                                     tracking: CGFloat = 0, rect: CGRect) -> CATextLayer {
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        let t = CATextLayer()
+        t.string = NSAttributedString(string: string, attributes: [
+            .font: font, .foregroundColor: color, .kern: tracking, .paragraphStyle: para,
+        ])
+        t.alignmentMode = .center
+        t.contentsScale = 3
+        t.isWrapped = false
+        t.truncationMode = .none
+        let lineH = font.ascender - font.descender
+        t.frame = CGRect(x: rect.minX, y: rect.midY - lineH / 2, width: rect.width, height: lineH)
+        return t
+    }
+
+    /// Width a mono label needs at `font`, used to size pills to their text.
+    private static func textWidth(_ string: String, font: UIFont, tracking: CGFloat = 0) -> CGFloat {
+        (string as NSString).size(withAttributes: [.font: font, .kern: tracking]).width
     }
 
     /// A single line of text, vertically centred in `frame`. Defaults to the
