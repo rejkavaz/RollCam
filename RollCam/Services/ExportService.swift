@@ -66,10 +66,13 @@ enum ExportService {
 
         // Snapshot the value types the renderer needs so we don't touch the
         // SwiftData model off the main actor.
+        let events = s.tagged.map {
+            Event(pos: $0.pos, label: $0.tag, timeLabel: $0.timeLabel, bpm: $0.bpm)
+        }
         let snapshot = Snapshot(series: s.series,
                                 durationSeconds: s.durationSeconds,
                                 peak: s.peak, avg: s.avg, maxHR: s.maxHR,
-                                title: s.title, date: s.date)
+                                title: s.title, date: s.date, events: events)
 
         Task.detached(priority: .userInitiated) {
             do {
@@ -92,6 +95,15 @@ enum ExportService {
         let maxHR: Int
         let title: String
         let date: Date
+        let events: [Event]
+    }
+
+    /// A tagged moment to surface as a timed notification banner in the render.
+    private struct Event: Sendable {
+        let pos: Double      // 0...1 along the clip
+        let label: String    // "Sweep"
+        let timeLabel: String// "2:14"
+        let bpm: Int
     }
 
     private static func render(srcURL: URL, snap: Snapshot, style: String,
@@ -242,6 +254,80 @@ enum ExportService {
         case "coach":   buildCoach(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         case "data":    buildData(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         default:        buildCinematic(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
+        }
+
+        // Timed event notifications float in over every style at their moment.
+        buildEvents(on: layer, w: w, h: h, unit: unit, pad: pad, snap: snap, duration: duration)
+    }
+
+    // MARK: Event notifications — a banner that slides in at each tagged moment.
+
+    private static func buildEvents(on layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
+                                    pad: CGFloat, snap: Snapshot, duration: Double) {
+        guard !snap.events.isEmpty, duration > 0.2 else { return }
+
+        let bannerH = unit * 0.085
+        // Top-left, which stays clear across all four styles (the chips live
+        // top-right; the bars/lockups live along the bottom).
+        let bannerW = min(w - pad * 2, unit * 0.46)
+        let bx = pad
+        // Sit just below the top edge (origin is bottom-left, so high y = top).
+        let by = h - pad * 1.3 - bannerH
+
+        let showFrac = min(0.45, 2.6 / duration)          // visible window
+        let fadeFrac = min(showFrac * 0.35, 0.45 / duration)
+
+        for ev in snap.events {
+            let zone = zoneColor(ev.bpm, snap.maxHR)
+            let banner = card(CGRect(x: bx, y: by, width: bannerW, height: bannerH),
+                              radius: bannerH * 0.28, fill: .black, alpha: 0.62,
+                              border: UIColor.white.withAlphaComponent(0.18))
+            banner.opacity = 0
+
+            // Leading accent dot.
+            let dotR = bannerH * 0.11
+            let dotX = bannerH * 0.34
+            let dot = CALayer()
+            dot.frame = CGRect(x: dotX, y: bannerH / 2 - dotR, width: dotR * 2, height: dotR * 2)
+            dot.cornerRadius = dotR
+            dot.backgroundColor = zone.cgColor
+            dot.shadowColor = zone.cgColor; dot.shadowRadius = dotR * 1.5
+            dot.shadowOpacity = 0.9; dot.shadowOffset = .zero
+            banner.addSublayer(dot)
+
+            let textX = dotX + dotR * 2 + bannerH * 0.28
+            let textW = bannerW - textX - bannerH * 0.3
+            banner.addSublayer(text(ev.label.uppercased(), fontSize: bannerH * 0.32, weight: .bold,
+                                    color: .white,
+                                    frame: CGRect(x: textX, y: bannerH * 0.5, width: textW, height: bannerH * 0.44)))
+            banner.addSublayer(text("\(ev.timeLabel) · \(ev.bpm) BPM", fontSize: bannerH * 0.18, weight: .medium,
+                                    mono: true, color: UIColor.white.withAlphaComponent(0.7), tracking: bannerH * 0.01,
+                                    frame: CGRect(x: textX, y: bannerH * 0.16, width: textW, height: bannerH * 0.26)))
+
+            // Timed fade-in / hold / fade-out around the event's position.
+            let f = min(max(ev.pos, 0.0), 1.0)
+            var keyTimes: [Double] = [0]
+            var values: [NSNumber] = [0]
+            func push(_ kt: Double, _ v: Double) {
+                let clamped = min(max(kt, 0), 1)
+                if clamped > keyTimes.last! { keyTimes.append(clamped); values.append(NSNumber(value: v)) }
+            }
+            push(f, 0)
+            push(f + fadeFrac, 1)
+            push(f + showFrac, 1)
+            push(f + showFrac + fadeFrac, 0)
+            if keyTimes.last! < 1 { keyTimes.append(1); values.append(values.last!) }
+
+            let fade = CAKeyframeAnimation(keyPath: "opacity")
+            fade.values = values
+            fade.keyTimes = keyTimes.map { NSNumber(value: $0) }
+            fade.calculationMode = .linear
+            fade.duration = duration
+            fade.beginTime = AVCoreAnimationBeginTimeAtZero
+            fade.isRemovedOnCompletion = false
+            fade.fillMode = .both
+            banner.add(fade, forKey: "fade")
+            layer.addSublayer(banner)
         }
     }
 
