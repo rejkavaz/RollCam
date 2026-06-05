@@ -162,7 +162,7 @@ struct LiveRecordingView: View {
     private var recordingDiagnostic: some View {
         VStack {
             Spacer()
-            Text("avail: \(camera.isAvailable ? "Y" : "N")  rec: \(camera.isRecording ? "Y" : "N")  denied: \(camera.permissionDenied ? "Y" : "N")  preview: \(camera.isAvailable ? "cam" : "fallback")")
+            Text("avail: \(camera.isAvailable ? "Y" : "N")  rec: \(camera.isRecording ? "Y" : "N")  denied: \(camera.permissionDenied ? "Y" : "N")  err: \(camera.lastError ?? "-")")
                 .font(RC.mono(10, .semibold)).foregroundStyle(.white)
                 .padding(.vertical, 6).padding(.horizontal, 12)
                 .background(.black.opacity(0.7), in: Capsule())

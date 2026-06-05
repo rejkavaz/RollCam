@@ -15,14 +15,17 @@ final class CameraController {
     // True when the user has denied (or restricted) camera access — the view
     // uses this to guide them to Settings instead of silently falling back.
     var permissionDenied = false
+    // Last recording-start/stop error, surfaced for on-device diagnostics.
+    var lastError: String?
 
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private let movieOutput = AVCaptureMovieFileOutput()
     @ObservationIgnored private let queue = DispatchQueue(label: "com.rejkavaz.RollCam.camera")
-    @ObservationIgnored private lazy var recordingDelegate = RecordingDelegate { [weak self] url in
+    @ObservationIgnored private lazy var recordingDelegate = RecordingDelegate { [weak self] url, err in
         DispatchQueue.main.async {
             self?.isRecording = false
             if let url { self?.lastRecordingURL = url }
+            self?.lastError = err
             let completion = self?.finishCompletion
             self?.finishCompletion = nil
             completion?(url)
@@ -80,13 +83,14 @@ final class CameraController {
 
             self.session.commitConfiguration()
             self.configured = true
+            // startRunning() blocks until the session is actually running, so
+            // by the time it returns the capture connections are live and it's
+            // safe to begin recording on this same serial queue.
             self.session.startRunning()
-            DispatchQueue.main.async {
-                self.isAvailable = true
-                // If the recording screen asked to record before we were ready,
-                // honour that intent now that the session is live.
-                if self.wantsRecording { self.startRecording() }
-            }
+            DispatchQueue.main.async { self.isAvailable = true }
+            // If the recording screen asked to record before we were ready,
+            // honour that intent now that the session is live.
+            self.beginRecordingIfReady()
         }
     }
 
@@ -122,38 +126,61 @@ final class CameraController {
     // MARK: Recording
 
     func startRecording() {
-        // Not configured yet — remember the intent; configure() will start us.
-        guard isAvailable else { wantsRecording = true; return }
-        guard !movieOutput.isRecording else { return }
+        // Record the intent and try to begin on the session queue. If the
+        // capture session isn't running yet, configure() will retry once live.
+        wantsRecording = true
+        queue.async { [weak self] in self?.beginRecordingIfReady() }
+    }
+
+    /// Begin recording — must run on `queue`, where session state is coherent.
+    /// AVCaptureMovieFileOutput rejects startRecording unless the session is
+    /// actually running with a live video connection; calling it from the main
+    /// thread mid-startup made the start silently fail (no file was written).
+    private func beginRecordingIfReady() {
+        guard wantsRecording, configured, session.isRunning, !movieOutput.isRecording else { return }
+        guard movieOutput.connection(with: .video) != nil else {
+            DispatchQueue.main.async { self.lastError = "no video connection" }
+            return
+        }
         wantsRecording = false
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("roll-\(Int(Date().timeIntervalSince1970)).mov")
         movieOutput.startRecording(to: url, recordingDelegate: recordingDelegate)
-        isRecording = true
+        DispatchQueue.main.async {
+            self.isRecording = true
+            self.lastError = nil
+        }
     }
 
     func stopRecording() {
-        guard movieOutput.isRecording else { return }
-        movieOutput.stopRecording()
+        wantsRecording = false
+        queue.async { [weak self] in
+            guard let self, self.movieOutput.isRecording else { return }
+            self.movieOutput.stopRecording()
+        }
     }
 
     /// Stop recording and call `completion` once the file is fully written.
     /// If nothing was recording (e.g. Simulator), completion fires immediately
     /// with whatever URL we have (usually nil) so the session still saves.
     func finishRecording(_ completion: @escaping (URL?) -> Void) {
-        guard movieOutput.isRecording else {
-            completion(lastRecordingURL)
-            return
+        queue.async { [weak self] in
+            guard let self else { DispatchQueue.main.async { completion(nil) }; return }
+            if self.movieOutput.isRecording {
+                DispatchQueue.main.async { self.finishCompletion = completion }
+                self.movieOutput.stopRecording()
+            } else {
+                let url = self.lastRecordingURL
+                DispatchQueue.main.async { completion(url) }
+            }
         }
-        finishCompletion = completion
-        movieOutput.stopRecording()
     }
 }
 
 // AVCaptureFileOutputRecordingDelegate must live on an NSObject.
 final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
-    private let onFinish: (URL?) -> Void
-    init(onFinish: @escaping (URL?) -> Void) { self.onFinish = onFinish }
+    private let onFinish: (URL?, String?) -> Void
+    init(onFinish: @escaping (URL?, String?) -> Void) { self.onFinish = onFinish }
 
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
                     from connections: [AVCaptureConnection], error: Error?) {
@@ -162,13 +189,16 @@ final class RecordingDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
         // AVErrorRecordingSuccessfullyFinishedKey == true — treating any error
         // as failure (the old behaviour) silently discarded every clip.
         var usable = error == nil
+        var errText: String?
         if let nsError = error as NSError? {
             usable = (nsError.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool) ?? false
+            if !usable { errText = "\(nsError.domain) \(nsError.code)" }
         }
         // Final guard: the file must exist and actually contain data.
         let attrs = try? FileManager.default.attributesOfItem(atPath: outputFileURL.path)
         let size = (attrs?[.size] as? Int) ?? 0
-        onFinish(usable && size > 0 ? outputFileURL : nil)
+        if usable && size == 0 { usable = false; errText = "file empty" }
+        onFinish(usable ? outputFileURL : nil, errText)
     }
 }
 
