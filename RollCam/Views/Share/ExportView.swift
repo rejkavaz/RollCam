@@ -37,7 +37,7 @@ struct ExportView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Share clip").font(RC.display(30, .bold)).foregroundStyle(RC.text)
 
-                    ExportPreview(style: style, peak: session.peak)
+                    ExportPreview(style: style, session: session)
 
                     // Overlay style picker
                     VStack(alignment: .leading, spacing: 12) {
@@ -180,49 +180,144 @@ struct ExportView: View {
 
 struct ExportPreview: View {
     var style: String
-    var peak: Int
+    var session: Session
+
+    private var peak: Int { session.peak }
+    private var avg: Int { session.avg }
+    private var zi: Int { HRZone.index(session.peak, max: Double(session.maxHR)) }
+    private var zClr: Color { HRZone.color(zi) }
+
+    // Real series when we have one; otherwise a gentle wave just for the preview.
+    private var previewSeries: [Double] {
+        session.series.count > 1
+            ? session.series
+            : (0..<44).map { 150 + 26 * sin(Double($0) / 5.0) + Double($0) * 0.5 }
+    }
+    private var lo: Double { (previewSeries.min() ?? 120) - 6 }
+    private var hi: Double { (previewSeries.max() ?? 190) + 6 }
 
     var body: some View {
         ZStack {
             RadialGradient(colors: [Color(hex: 0x2A3243), Color(hex: 0x0C0F15)],
                            center: UnitPoint(x: 0.4, y: 0.3), startRadius: 0, endRadius: 260)
 
-            if style == "cinematic" {
-                LinearGradient(colors: [RC.z1.opacity(0.20), RC.hr.opacity(0.34)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-            }
-            if style == "minimal" {
-                VStack { HStack { Spacer(); Text("\(peak)").font(RC.mono(22, .semibold)).foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 6, y: 1).padding(14) }; Spacer() }
-            }
-            if style == "coach" {
-                VStack { HStack { Spacer()
-                    HStack(spacing: 8) {
-                        Circle().fill(RC.hr).frame(width: 7, height: 7)
-                        Text("\(peak)").font(RC.mono(14, .semibold)).foregroundStyle(.white)
-                        Text("Z4").font(RC.mono(10)).foregroundStyle(RC.z4)
-                    }
-                    .padding(.vertical, 6).padding(.horizontal, 11)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
-                    .padding(14)
-                }; Spacer() }
-            }
-            if style == "data" {
-                VStack { Spacer()
-                    HStack(spacing: 10) {
-                        Text("\(peak) bpm").font(RC.mono(12, .semibold)).foregroundStyle(RC.hr)
-                        Text("ZONE 4").font(RC.mono(10)).foregroundStyle(.white.opacity(0.6))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12).frame(height: 34)
-                    .background(.black.opacity(0.6))
-                }
+            switch style {
+            case "minimal":  minimalOverlay
+            case "coach":    coachOverlay
+            case "data":     dataOverlay
+            default:         cinematicOverlay
             }
         }
         .aspectRatio(16.0 / 9.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
+    }
+
+    private var ribbon: some View {
+        HRGraph(series: previewSeries, minY: lo, maxY: hi, stroke: zClr, area: zClr,
+                fill: true, grid: false, lineWidth: 2, padTop: 6, padBot: 0)
+    }
+
+    // Top-right frosted chip with the peak number only.
+    private var minimalOverlay: some View {
+        VStack {
+            HStack {
+                Spacer()
+                VStack(spacing: 1) {
+                    Text("\(peak)").font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("♥ PEAK BPM").font(RC.mono(8, .semibold)).tracking(1).foregroundStyle(zClr)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 9)
+                .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
+            }
+            Spacer()
+        }
+        .padding(14)
+    }
+
+    // Top-right badge: heart dot + peak + zone pill + avg line.
+    private var coachOverlay: some View {
+        VStack {
+            HStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Circle().fill(zClr).frame(width: 7, height: 7).shadow(color: zClr, radius: 4)
+                        Text("\(peak)").font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("Z\(zi + 1)").font(RC.mono(9, .heavy)).foregroundStyle(.white)
+                            .padding(.vertical, 2).padding(.horizontal, 7)
+                            .background(zClr, in: Capsule())
+                    }
+                    Text("AVG \(avg) · \(HRZone.name(zi).uppercased())")
+                        .font(RC.mono(8, .medium)).foregroundStyle(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.16), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
+            }
+            Spacer()
+        }
+        .padding(14)
+    }
+
+    // Full-frame: zone tint + bottom scrim + lockup above a glowing HR ribbon.
+    private var cinematicOverlay: some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(colors: [zClr.opacity(0.20), .clear],
+                           startPoint: .bottomLeading, endPoint: .center)
+            LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer()
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("HEART RATE").font(RC.mono(7.5, .semibold)).tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text("\(peak)").font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("PEAK · AVG \(avg) BPM").font(RC.mono(8, .semibold)).foregroundStyle(zClr)
+                }
+                .padding(.leading, 14).padding(.bottom, 4)
+                ribbon.frame(height: 30)
+            }
+        }
+    }
+
+    // Bottom frosted data bar: stats column + zone pill + graph + time axis.
+    private var dataOverlay: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("PEAK HR").font(RC.mono(7, .semibold)).foregroundStyle(.white.opacity(0.55))
+                    Text("\(peak)").font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("AVG \(avg) BPM").font(RC.mono(8, .medium)).foregroundStyle(zClr)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Z\(zi + 1) · \(HRZone.name(zi).uppercased())")
+                            .font(RC.mono(7.5, .bold)).foregroundStyle(.white)
+                            .padding(.vertical, 2).padding(.horizontal, 7)
+                            .background(zClr, in: Capsule())
+                        Spacer()
+                    }
+                    ribbon.frame(height: 28)
+                    HStack {
+                        Text("0:00").font(RC.mono(7)).foregroundStyle(.white.opacity(0.5))
+                        Spacer()
+                        Text(session.durationLabel).font(RC.mono(7)).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(.black.opacity(0.62))
+            .overlay(alignment: .top) { Rectangle().fill(zClr.opacity(0.85)).frame(height: 1.5) }
+        }
     }
 }
 

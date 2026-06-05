@@ -225,129 +225,323 @@ enum ExportService {
     }
 
     // MARK: Overlay drawing
+    //
+    // All layers use the AVVideoCompositionCoreAnimationTool coordinate space:
+    // origin bottom-left, y increasing upward. Styles are zone-aware — the
+    // accent tints to the colour of the session's peak zone.
 
     private static func buildOverlay(on layer: CALayer, size: CGSize,
                                      snap: Snapshot, style: String, duration: Double) {
         let w = size.width, h = size.height
         let unit = min(w, h)
+        let pad = unit * 0.045
+        let zone = zoneColor(snap.peak, snap.maxHR)
 
-        // Cinematic: a soft bottom-up tint so the readout sits on a darker base.
-        if style == "cinematic" {
-            let grad = CAGradientLayer()
-            grad.frame = CGRect(x: 0, y: 0, width: w, height: h)
-            grad.colors = [
-                UIColor(red: 1, green: 0.29, blue: 0.23, alpha: 0.22).cgColor,
-                UIColor.clear.cgColor,
-            ]
-            grad.startPoint = CGPoint(x: 0, y: 0)
-            grad.endPoint = CGPoint(x: 0, y: 0.55)
-            layer.addSublayer(grad)
-        }
-
-        // Minimal / coach: a compact badge in the top-right corner only.
-        if style == "minimal" || style == "coach" {
-            let badgeH = max(unit * 0.072, 54)
-            let pad = unit * 0.03
-            let text = style == "coach" ? "♥ \(snap.peak) · Z4 PEAK" : "♥ \(snap.peak)"
-            let est = CGFloat(text.count) * badgeH * 0.42 + badgeH * 0.7
-            let badge = CALayer()
-            badge.frame = CGRect(x: w - est - pad, y: h - badgeH - pad,
-                                 width: est, height: badgeH)
-            badge.backgroundColor = UIColor.black.withAlphaComponent(0.5).cgColor
-            badge.cornerRadius = badgeH * 0.28
-            badge.borderWidth = 1
-            badge.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
-            badge.addSublayer(textLayer(text, size: badgeH * 0.42,
-                                        color: .white, frame: badge.bounds,
-                                        align: .center))
-            layer.addSublayer(badge)
-            return
-        }
-
-        // Cinematic / data: a bottom readout bar with the full HR graph + playhead.
-        let barH = max(h * 0.16, unit * 0.18)
-        let bar = CALayer()
-        bar.frame = CGRect(x: 0, y: 0, width: w, height: barH)
-        if style == "data" {
-            bar.backgroundColor = UIColor.black.withAlphaComponent(0.55).cgColor
-        }
-        layer.addSublayer(bar)
-
-        let inset = unit * 0.04
-        let captionH = barH * 0.34
-
-        // Peak / avg caption.
-        let caption = "PEAK \(snap.peak)   ·   AVG \(snap.avg) bpm"
-        bar.addSublayer(textLayer(caption, size: captionH * 0.62,
-                                  color: UIColor(red: 1, green: 0.29, blue: 0.23, alpha: 1),
-                                  frame: CGRect(x: inset, y: barH - captionH - inset * 0.3,
-                                                width: w - inset * 2, height: captionH),
-                                  align: .left, bold: true))
-
-        // HR graph path across the bar.
-        let graphRect = CGRect(x: inset, y: inset * 0.6,
-                               width: w - inset * 2,
-                               height: barH - captionH - inset)
-        let series = snap.series
-        if series.count > 1 {
-            let lo = series.min() ?? 60, hi = series.max() ?? 200
-            let span = max(1, hi - lo)
-            let path = CGMutablePath()
-            for (i, v) in series.enumerated() {
-                let x = graphRect.minX + graphRect.width * CGFloat(i) / CGFloat(series.count - 1)
-                let y = graphRect.minY + graphRect.height * CGFloat((v - lo) / span)
-                if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                else { path.addLine(to: CGPoint(x: x, y: y)) }
-            }
-            let line = CAShapeLayer()
-            line.path = path
-            line.strokeColor = UIColor(red: 1, green: 0.29, blue: 0.23, alpha: 0.9).cgColor
-            line.fillColor = UIColor.clear.cgColor
-            line.lineWidth = max(2, unit * 0.004)
-            line.lineJoin = .round
-            line.lineCap = .round
-            bar.addSublayer(line)
-
-            // A vertical playhead that sweeps left→right in sync with playback.
-            let head = CALayer()
-            head.backgroundColor = UIColor.white.cgColor
-            let headW = max(1.5, unit * 0.003)
-            head.frame = CGRect(x: graphRect.minX, y: inset * 0.6,
-                                width: headW, height: graphRect.height)
-            head.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            head.position = CGPoint(x: graphRect.minX, y: inset * 0.6 + graphRect.height / 2)
-
-            let sweep = CABasicAnimation(keyPath: "position.x")
-            sweep.fromValue = graphRect.minX
-            sweep.toValue = graphRect.maxX
-            sweep.duration = max(0.1, duration)
-            sweep.beginTime = AVCoreAnimationBeginTimeAtZero
-            sweep.isRemovedOnCompletion = false
-            sweep.fillMode = .both
-            head.add(sweep, forKey: "sweep")
-            bar.addSublayer(head)
+        switch style {
+        case "minimal": buildMinimal(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone)
+        case "coach":   buildCoach(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone)
+        case "data":    buildData(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
+        default:        buildCinematic(layer, w: w, h: h, unit: unit, pad: pad, snap: snap, zone: zone, duration: duration)
         }
     }
 
-    private enum TextAlign { case left, center }
+    // MARK: Minimal — a single frosted HR chip, top-right.
 
-    private static func textLayer(_ string: String, size: CGFloat, color: UIColor,
-                                  frame: CGRect, align: TextAlign,
-                                  bold: Bool = false) -> CATextLayer {
+    private static func buildMinimal(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
+                                     pad: CGFloat, snap: Snapshot, zone: UIColor) {
+        let cw = unit * 0.30, ch = unit * 0.165
+        let chip = card(CGRect(x: w - cw - pad, y: h - ch - pad, width: cw, height: ch),
+                        radius: ch * 0.26, fill: .black, alpha: 0.42,
+                        border: UIColor.white.withAlphaComponent(0.18))
+        layer.addSublayer(chip)
+
+        chip.addSublayer(text("\(snap.peak)", fontSize: ch * 0.5, weight: .bold, rounded: true,
+                              color: .white, align: .center,
+                              frame: CGRect(x: 0, y: ch * 0.32, width: cw, height: ch * 0.55)))
+        chip.addSublayer(text("♥ PEAK BPM", fontSize: ch * 0.14, weight: .semibold, mono: true,
+                              color: zone, tracking: ch * 0.02, align: .center,
+                              frame: CGRect(x: 0, y: ch * 0.12, width: cw, height: ch * 0.2)))
+    }
+
+    // MARK: Coach — a richer badge with peak, zone pill and avg, top-right.
+
+    private static func buildCoach(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
+                                   pad: CGFloat, snap: Snapshot, zone: UIColor) {
+        let cw = unit * 0.46, ch = unit * 0.205
+        let x0 = w - cw - pad
+        let chip = card(CGRect(x: x0, y: h - ch - pad, width: cw, height: ch),
+                        radius: ch * 0.22, fill: .black, alpha: 0.5,
+                        border: UIColor.white.withAlphaComponent(0.16))
+        layer.addSublayer(chip)
+
+        let inset = ch * 0.22
+        // Top row: heart dot + peak bpm + zone pill.
+        let dotR = ch * 0.07
+        let dot = CALayer()
+        dot.frame = CGRect(x: inset, y: ch * 0.56, width: dotR * 2, height: dotR * 2)
+        dot.cornerRadius = dotR
+        dot.backgroundColor = zone.cgColor
+        dot.shadowColor = zone.cgColor; dot.shadowRadius = dotR * 1.6
+        dot.shadowOpacity = 0.9; dot.shadowOffset = .zero
+        chip.addSublayer(dot)
+
+        chip.addSublayer(text("\(snap.peak)", fontSize: ch * 0.34, weight: .bold, rounded: true,
+                              color: .white, frame: CGRect(x: inset + dotR * 2 + ch * 0.12,
+                                                           y: ch * 0.46, width: cw * 0.5, height: ch * 0.4)))
+        // Zone pill.
+        let pillW = unit * 0.115, pillH = ch * 0.30
+        let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
+        let pill = card(CGRect(x: x0 + cw - pillW - inset, y: h - ch - pad + ch * 0.52,
+                               width: pillW, height: pillH),
+                        radius: pillH * 0.5, fill: zone, alpha: 0.92, border: nil, shadow: false)
+        layer.addSublayer(pill)
+        pill.addSublayer(text("Z\(zi + 1)", fontSize: pillH * 0.5, weight: .heavy, mono: true,
+                              color: .white, align: .center,
+                              frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
+
+        chip.addSublayer(text("AVG \(snap.avg) · \(HRZone.name(zi).uppercased())",
+                              fontSize: ch * 0.13, weight: .medium, mono: true,
+                              color: UIColor.white.withAlphaComponent(0.7), tracking: ch * 0.012,
+                              frame: CGRect(x: inset, y: ch * 0.16, width: cw - inset * 2, height: ch * 0.22)))
+    }
+
+    // MARK: Cinematic — full-frame scrims, a glowing HR ribbon + a bottom lockup.
+
+    private static func buildCinematic(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
+                                       pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
+        // Zone-tinted wash from the lower-left corner.
+        let tint = CAGradientLayer()
+        tint.frame = CGRect(x: 0, y: 0, width: w, height: h)
+        tint.colors = [zone.withAlphaComponent(0.20).cgColor, UIColor.clear.cgColor]
+        tint.startPoint = CGPoint(x: 0.0, y: 0.0)
+        tint.endPoint = CGPoint(x: 0.6, y: 0.6)
+        layer.addSublayer(tint)
+
+        // Bottom legibility scrim.
+        let scrim = CAGradientLayer()
+        scrim.frame = CGRect(x: 0, y: 0, width: w, height: h * 0.4)
+        scrim.colors = [UIColor.black.withAlphaComponent(0.8).cgColor, UIColor.clear.cgColor]
+        scrim.startPoint = CGPoint(x: 0.5, y: 0.0)
+        scrim.endPoint = CGPoint(x: 0.5, y: 1.0)
+        layer.addSublayer(scrim)
+
+        // Glowing HR ribbon along the very bottom edge.
+        let ribbonH = unit * 0.13
+        layer.addSublayer(graphLayer(rect: CGRect(x: 0, y: 0, width: w, height: ribbonH),
+                                     series: snap.series, color: zone,
+                                     lineWidth: max(2.5, unit * 0.005),
+                                     fill: true, dot: true, duration: duration))
+
+        // Bottom-left lockup.
+        let numH = unit * 0.105
+        let numY = ribbonH + pad * 0.5
+        layer.addSublayer(text("\(snap.peak)", fontSize: numH, weight: .bold, rounded: true,
+                               color: .white, frame: CGRect(x: pad, y: numY, width: w * 0.7, height: numH)))
+        layer.addSublayer(text("PEAK · AVG \(snap.avg) BPM", fontSize: unit * 0.026, weight: .semibold,
+                               mono: true, color: zone, tracking: unit * 0.004,
+                               frame: CGRect(x: pad + unit * 0.008, y: numY - unit * 0.034,
+                                             width: w * 0.7, height: unit * 0.032)))
+        layer.addSublayer(text("HEART RATE", fontSize: unit * 0.024, weight: .semibold, mono: true,
+                               color: UIColor.white.withAlphaComponent(0.7), tracking: unit * 0.006,
+                               frame: CGRect(x: pad + unit * 0.008, y: numY + numH - unit * 0.004,
+                                             width: w * 0.7, height: unit * 0.03)))
+    }
+
+    // MARK: Data — a frosted bottom bar with stats and the full HR graph.
+
+    private static func buildData(_ layer: CALayer, w: CGFloat, h: CGFloat, unit: CGFloat,
+                                  pad: CGFloat, snap: Snapshot, zone: UIColor, duration: Double) {
+        let barH = max(h * 0.2, unit * 0.22)
+        let bar = CALayer()
+        bar.frame = CGRect(x: 0, y: 0, width: w, height: barH)
+        bar.backgroundColor = UIColor.black.withAlphaComponent(0.6).cgColor
+        layer.addSublayer(bar)
+        // Accent hairline along the top edge of the bar.
+        let hair = CALayer()
+        hair.frame = CGRect(x: 0, y: barH - max(1.5, unit * 0.003), width: w, height: max(1.5, unit * 0.003))
+        hair.backgroundColor = zone.withAlphaComponent(0.85).cgColor
+        layer.addSublayer(hair)
+
+        // Left stat column.
+        let zi = HRZone.index(snap.peak, max: Double(snap.maxHR))
+        bar.addSublayer(text("PEAK HEART RATE", fontSize: barH * 0.1, weight: .semibold, mono: true,
+                             color: UIColor.white.withAlphaComponent(0.55), tracking: barH * 0.01,
+                             frame: CGRect(x: pad, y: barH * 0.66, width: w * 0.34, height: barH * 0.16)))
+        bar.addSublayer(text("\(snap.peak)", fontSize: barH * 0.42, weight: .bold, rounded: true,
+                             color: .white, frame: CGRect(x: pad, y: barH * 0.26, width: w * 0.28, height: barH * 0.44)))
+        bar.addSublayer(text("AVG \(snap.avg) BPM", fontSize: barH * 0.1, weight: .medium, mono: true,
+                             color: zone, tracking: barH * 0.008,
+                             frame: CGRect(x: pad, y: barH * 0.1, width: w * 0.34, height: barH * 0.16)))
+
+        // Zone pill.
+        let pillW = unit * 0.16, pillH = barH * 0.2
+        let pill = card(CGRect(x: pad + unit * 0.16, y: barH * 0.5, width: pillW, height: pillH),
+                        radius: pillH * 0.5, fill: zone, alpha: 0.92, border: nil, shadow: false)
+        layer.addSublayer(pill)
+        pill.addSublayer(text("Z\(zi + 1) · \(HRZone.name(zi).uppercased())", fontSize: pillH * 0.42,
+                              weight: .bold, mono: true, color: .white, align: .center,
+                              frame: CGRect(x: 0, y: 0, width: pillW, height: pillH)))
+
+        // HR graph on the right.
+        let gx = w * 0.4
+        let gRect = CGRect(x: gx, y: barH * 0.28, width: w - gx - pad, height: barH * 0.46)
+        layer.addSublayer(graphLayer(rect: gRect, series: snap.series, color: zone,
+                                     lineWidth: max(2, unit * 0.004), fill: true, dot: true,
+                                     duration: duration))
+        bar.addSublayer(text("0:00", fontSize: barH * 0.08, weight: .regular, mono: true,
+                             color: UIColor.white.withAlphaComponent(0.5),
+                             frame: CGRect(x: gx, y: barH * 0.1, width: w * 0.2, height: barH * 0.14)))
+        bar.addSublayer(text(clock(snap.durationSeconds), fontSize: barH * 0.08, weight: .regular, mono: true,
+                             color: UIColor.white.withAlphaComponent(0.5), align: .right,
+                             frame: CGRect(x: w - pad - w * 0.2, y: barH * 0.1, width: w * 0.2, height: barH * 0.14)))
+    }
+
+    // MARK: Reusable layer builders
+
+    /// A frosted, rounded card with an optional border and soft shadow.
+    private static func card(_ frame: CGRect, radius: CGFloat, fill: UIColor, alpha: CGFloat,
+                             border: UIColor?, shadow: Bool = true) -> CALayer {
+        let c = CALayer()
+        c.frame = frame
+        c.backgroundColor = fill.withAlphaComponent(alpha).cgColor
+        c.cornerRadius = radius
+        c.masksToBounds = false
+        if let border {
+            c.borderColor = border.cgColor
+            c.borderWidth = max(1, frame.height * 0.014)
+        }
+        if shadow {
+            c.shadowColor = UIColor.black.cgColor
+            c.shadowOpacity = 0.35
+            c.shadowRadius = radius * 0.9
+            c.shadowOffset = CGSize(width: 0, height: -frame.height * 0.05)
+        }
+        return c
+    }
+
+    /// An HR line graph with a gradient area fill and a glowing dot that rides
+    /// the actual curve (keyframe animation along the line path).
+    private static func graphLayer(rect: CGRect, series: [Double], color: UIColor,
+                                   lineWidth: CGFloat, fill: Bool, dot: Bool,
+                                   duration: Double) -> CALayer {
+        let container = CALayer()
+        container.frame = rect
+        guard series.count > 1 else { return container }
+
+        let lo = (series.min() ?? 60) - 4
+        let hi = (series.max() ?? 200) + 4
+        let span = max(1, hi - lo)
+        let n = series.count
+        func point(_ i: Int) -> CGPoint {
+            CGPoint(x: rect.width * CGFloat(i) / CGFloat(n - 1),
+                    y: rect.height * CGFloat((series[i] - lo) / span))
+        }
+
+        let line = CGMutablePath()
+        line.move(to: point(0))
+        for i in 1..<n { line.addLine(to: point(i)) }
+
+        if fill {
+            let area = line.mutableCopy()!
+            area.addLine(to: CGPoint(x: rect.width, y: 0))
+            area.addLine(to: CGPoint(x: 0, y: 0))
+            area.closeSubpath()
+            let mask = CAShapeLayer()
+            mask.path = area
+            let grad = CAGradientLayer()
+            grad.frame = container.bounds
+            grad.colors = [color.withAlphaComponent(0.0).cgColor,
+                           color.withAlphaComponent(0.42).cgColor]
+            grad.startPoint = CGPoint(x: 0.5, y: 0.0)   // baseline (transparent)
+            grad.endPoint = CGPoint(x: 0.5, y: 1.0)     // peaks (tinted)
+            grad.mask = mask
+            container.addSublayer(grad)
+        }
+
+        let stroke = CAShapeLayer()
+        stroke.path = line
+        stroke.strokeColor = color.cgColor
+        stroke.fillColor = UIColor.clear.cgColor
+        stroke.lineWidth = lineWidth
+        stroke.lineJoin = .round
+        stroke.lineCap = .round
+        stroke.shadowColor = color.cgColor
+        stroke.shadowRadius = lineWidth * 1.6
+        stroke.shadowOpacity = 0.7
+        stroke.shadowOffset = .zero
+        container.addSublayer(stroke)
+
+        if dot {
+            let r = max(lineWidth * 2.2, rect.height * 0.06)
+            let head = CALayer()
+            head.frame = CGRect(x: -r, y: -r, width: r * 2, height: r * 2)
+            head.cornerRadius = r
+            head.backgroundColor = UIColor.white.cgColor
+            head.borderColor = color.cgColor
+            head.borderWidth = max(1.5, r * 0.34)
+            head.shadowColor = color.cgColor
+            head.shadowRadius = r * 1.1
+            head.shadowOpacity = 0.95
+            head.shadowOffset = .zero
+            let ride = CAKeyframeAnimation(keyPath: "position")
+            ride.path = line
+            ride.calculationMode = .paced
+            ride.duration = max(0.1, duration)
+            ride.beginTime = AVCoreAnimationBeginTimeAtZero
+            ride.isRemovedOnCompletion = false
+            ride.fillMode = .both
+            head.add(ride, forKey: "ride")
+            container.addSublayer(head)
+        }
+        return container
+    }
+
+    /// A single line of text, vertically centred in `frame`. Defaults to the
+    /// rounded system face for big numerals; pass `mono` for label rows.
+    private static func text(_ string: String, fontSize: CGFloat, weight: UIFont.Weight,
+                             mono: Bool = false, rounded: Bool = false, color: UIColor,
+                             tracking: CGFloat = 0, align: NSTextAlignment = .left,
+                             frame: CGRect) -> CATextLayer {
+        let font: UIFont
+        if mono {
+            font = .monospacedSystemFont(ofSize: fontSize, weight: weight)
+        } else if rounded,
+                  let d = UIFont.systemFont(ofSize: fontSize, weight: weight).fontDescriptor.withDesign(.rounded) {
+            font = UIFont(descriptor: d, size: fontSize)
+        } else {
+            font = .systemFont(ofSize: fontSize, weight: weight)
+        }
+        let para = NSMutableParagraphStyle()
+        para.alignment = align
+        let attr = NSAttributedString(string: string, attributes: [
+            .font: font, .foregroundColor: color, .kern: tracking, .paragraphStyle: para,
+        ])
         let t = CATextLayer()
-        t.string = string
-        t.font = UIFont.monospacedSystemFont(ofSize: size, weight: bold ? .semibold : .regular)
-        t.fontSize = size
-        t.foregroundColor = color.cgColor
-        t.alignmentMode = align == .center ? .center : .left
+        t.string = attr
         t.contentsScale = 3
         t.isWrapped = false
         t.truncationMode = .none
-        // Vertically center the single line within the frame.
-        let lineH = size * 1.25
-        t.frame = CGRect(x: frame.minX, y: frame.midY - lineH / 2,
-                         width: frame.width, height: lineH)
+        let lineH = fontSize * 1.3
+        t.frame = CGRect(x: frame.minX, y: frame.midY - lineH / 2, width: frame.width, height: lineH)
         return t
+    }
+
+    /// hex 0xRRGGBB → UIColor.
+    private static func ui(_ hex: UInt32, _ a: CGFloat = 1) -> UIColor {
+        UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255, alpha: a)
+    }
+
+    /// Colour of the zone a given bpm falls in (matches the app's RC.zones).
+    private static func zoneColor(_ bpm: Int, _ maxHR: Int) -> UIColor {
+        let hexes: [UInt32] = [0x4C7DF0, 0x25B69E, 0xE7C24A, 0xF0883C, 0xFF4B3A]
+        return ui(hexes[min(max(HRZone.index(bpm, max: Double(maxHR)), 0), 4)])
+    }
+
+    /// m:ss clock for the duration label.
+    private static func clock(_ secs: Int) -> String {
+        String(format: "%d:%02d", secs / 60, secs % 60)
     }
 
     // MARK: Helpers
