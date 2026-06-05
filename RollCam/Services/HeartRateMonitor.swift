@@ -91,12 +91,17 @@ final class HeartRateMonitor {
         current = base
         bpm = Int(base.rounded())
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.9, repeats: true) { [weak self] _ in
+        // Schedule in `.common` modes (not just `.default`): while recording the
+        // main run loop sits in a mode that starves default-mode timers, which
+        // froze the simulated HR mid-roll even though the clock kept ticking.
+        let t = Timer(timeInterval: 0.9, repeats: true) { [weak self] _ in
             guard let self else { return }
             let drift = (self.base - self.current) * 0.08
             self.current = min(198, max(120, self.current + drift + Double.random(in: -4.5...4.5)))
             self.push(self.current)
         }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     // MARK: Bluetooth
