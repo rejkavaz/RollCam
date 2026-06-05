@@ -19,6 +19,9 @@ struct ReviewTagView: View {
 
     private var n: Int { max(1, session.series.count) }
     private var bpmAt: Int {
+        // A session can have no HR samples (e.g. Bluetooth selected but no strap
+        // paired). Guard the subscript so review never traps on an empty series.
+        guard !session.series.isEmpty else { return 0 }
         let idx = min(n - 1, max(0, Int((ph * Double(n - 1)).rounded())))
         return Int(session.series[idx].rounded())
     }
