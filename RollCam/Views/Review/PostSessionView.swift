@@ -13,6 +13,36 @@ struct PostSessionView: View {
 
     private var breakdown: String { SessionAnalytics.breakdown(for: session) }
 
+    // TEMPORARY DIAGNOSTIC — reveals where the recording→playback chain breaks.
+    // Remove once the video issue is confirmed fixed on-device.
+    private var videoDiagnostic: String {
+        var lines: [String] = []
+        let raw = session.videoPath ?? "nil"
+        lines.append("videoPath: \(raw)")
+        if let url = session.videoURL {
+            let exists = FileManager.default.fileExists(atPath: url.path)
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
+            lines.append("resolved: \(url.lastPathComponent)")
+            lines.append("exists: \(exists)  size: \(size.map(String.init) ?? "?")")
+        } else {
+            lines.append("videoURL: nil (cannot resolve / no file)")
+        }
+        lines.append("hasVideo: \(video.hasVideo)")
+        return lines.joined(separator: "\n")
+    }
+
+    private var diagnosticCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("VIDEO DIAGNOSTIC").font(RC.mono(9, .semibold)).foregroundStyle(RC.hr)
+            Text(videoDiagnostic).font(RC.mono(10)).foregroundStyle(RC.text2)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(RC.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -43,6 +73,8 @@ struct PostSessionView: View {
                     Text(session.title).font(RC.display(30, .bold)).foregroundStyle(RC.text)
                     Text("\(session.rounds) rounds · \(session.durationLabel) mat time")
                         .font(RC.mono(12)).foregroundStyle(RC.text3)
+
+                    diagnosticCard
 
                     if video.hasVideo { videoCard }
 

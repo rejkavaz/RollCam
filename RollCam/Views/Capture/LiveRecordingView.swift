@@ -46,6 +46,7 @@ struct LiveRecordingView: View {
             topBar
             orientationToggle
             zoneStrip
+            recordingDiagnostic
 
             if camera.permissionDenied { permissionBanner }
 
@@ -153,6 +154,19 @@ struct LiveRecordingView: View {
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
             .padding(.horizontal, 18)
             .padding(.bottom, 150)
+        }
+    }
+
+    // TEMPORARY DIAGNOSTIC — live camera/recording state during a roll.
+    // Remove once the video issue is confirmed fixed on-device.
+    private var recordingDiagnostic: some View {
+        VStack {
+            Spacer()
+            Text("avail: \(camera.isAvailable ? "Y" : "N")  rec: \(camera.isRecording ? "Y" : "N")  denied: \(camera.permissionDenied ? "Y" : "N")  preview: \(camera.isAvailable ? "cam" : "fallback")")
+                .font(RC.mono(10, .semibold)).foregroundStyle(.white)
+                .padding(.vertical, 6).padding(.horizontal, 12)
+                .background(.black.opacity(0.7), in: Capsule())
+                .padding(.bottom, 116)
         }
     }
 
