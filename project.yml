@@ -36,12 +36,12 @@ targets:
       # INFOPLIST_KEY_* build settings can't represent.
       path: RollCam/Generated-Info.plist
       properties:
-        CFBundleDisplayName: RollCam
+        CFBundleDisplayName: MatPulse
         # CoreBluetooth: connect to a BLE chest strap (Polar H10, Wahoo, etc.)
-        NSBluetoothAlwaysUsageDescription: "RollCam connects to your heart-rate chest strap over Bluetooth to record live HR while you roll. Used only while the app is open."
+        NSBluetoothAlwaysUsageDescription: "MatPulse connects to your heart-rate chest strap over Bluetooth to record live HR while you roll. Used only while the app is open."
         # AVFoundation: record the roll
-        NSCameraUsageDescription: "RollCam uses the camera to film your roll with a live heart-rate overlay. Video stays on your device until you choose to share it."
-        NSMicrophoneUsageDescription: "RollCam records audio with your roll and lets you pin a short voice note to a session. Stored only on your device."
+        NSCameraUsageDescription: "MatPulse uses the camera to film your roll with a live heart-rate overlay. Video stays on your device until you choose to share it."
+        NSMicrophoneUsageDescription: "MatPulse records audio with your roll and lets you pin a short voice note to a session. Stored only on your device."
         NSPhotoLibraryAddUsageDescription: "Lets you save an exported highlight clip to your photo library."
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

@@ -32,7 +32,12 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                RCHeader(title: "Rolls", eyebrow: totalLabel, large: true)
+                RCHeader(title: "Rolls", eyebrow: totalLabel, large: true) {
+                    Button { router.push(.settings) } label: {
+                        MatPulseMark(size: 34, variant: .color)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 VStack(alignment: .leading, spacing: 16) {
                     if sessions.isEmpty {

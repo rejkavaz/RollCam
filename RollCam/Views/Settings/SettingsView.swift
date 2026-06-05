@@ -9,7 +9,7 @@ struct SettingsView: View {
         @Bindable var settings = settings
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                RCHeader(title: "Settings", eyebrow: "RollCam", large: true, onBack: { router.pop() })
+                RCHeader(title: "Settings", eyebrow: "MatPulse", large: true, onBack: { router.pop() })
 
                 VStack(alignment: .leading, spacing: 16) {
                     // Heart-rate source
@@ -85,7 +85,17 @@ struct SettingsView: View {
 
                     // About
                     Eyebrow("About")
-                    infoRow("heart.fill", "RollCam", "Open-source performance instrument for grapplers. No subscriptions, no AI, no telemetry.")
+                    VStack(alignment: .leading, spacing: 14) {
+                        MatPulseLockup(markSize: 46, type: 28)
+                        (Text("Film the roll. ").foregroundColor(RC.text)
+                            + Text("Read the pulse.").foregroundColor(RC.hr))
+                            .font(.system(size: 18, weight: .bold))
+                            .tracking(-0.3)
+                        Text("Open-source performance instrument for grapplers. No subscriptions, no AI, no telemetry.")
+                            .font(.system(size: 12)).foregroundStyle(RC.text3).lineSpacing(3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .rcCard(18)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
