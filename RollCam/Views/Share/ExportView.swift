@@ -113,12 +113,12 @@ struct ExportView: View {
                             Label("Rendering · \(Int(renderProgress * 100))%", systemImage: "gearshape.2")
                                 .font(.system(size: 15))
                         } else {
-                            Label(session.videoPath == nil ? "No video to render" : "Export clip",
+                            Label(session.videoURL == nil ? "No video to render" : "Export clip",
                                   systemImage: "arrow.down.circle").font(.system(size: 15))
                         }
                     }
                     .buttonStyle(RCButtonStyle(kind: .hr))
-                    .disabled(rendering || session.videoPath == nil)
+                    .disabled(rendering || session.videoURL == nil)
 
                     HStack(spacing: 8) {
                         Spacer()
@@ -158,7 +158,7 @@ struct ExportView: View {
     }
 
     private func exportVideo() {
-        guard !rendering, session.videoPath != nil else { return }
+        guard !rendering, session.videoURL != nil else { return }
         rendering = true
         renderProgress = 0
         ExportService.renderClip(for: session, style: style, blurFaces: settings.blurFaces) { p in

@@ -60,10 +60,9 @@ enum ExportService {
                            blurFaces: Bool,
                            progress: @escaping (Double) -> Void,
                            completion: @escaping (Result<URL, Error>) -> Void) {
-        guard let path = s.videoPath, FileManager.default.fileExists(atPath: path) else {
+        guard let srcURL = s.videoURL else {
             completion(.failure(ExportError.noVideo)); return
         }
-        let srcURL = URL(fileURLWithPath: path)
 
         // Snapshot the value types the renderer needs so we don't touch the
         // SwiftData model off the main actor.

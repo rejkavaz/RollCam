@@ -137,7 +137,7 @@ struct PostSessionView: View {
             }
         }
         .scrollIndicators(.hidden)
-        .onAppear { video.load(path: session.videoPath) }
+        .onAppear { video.load(url: session.videoURL) }
         .onDisappear { video.pause() }
         .alert("Rename session", isPresented: $showRename) {
             TextField("Title", text: $draftTitle)
@@ -168,7 +168,7 @@ struct PostSessionView: View {
 
     private func deleteSession() {
         video.pause()
-        if let path = session.videoPath { try? FileManager.default.removeItem(atPath: path) }
+        if let url = session.videoURL { try? FileManager.default.removeItem(at: url) }
         context.delete(session)
         try? context.save()
         router.popToRoot()

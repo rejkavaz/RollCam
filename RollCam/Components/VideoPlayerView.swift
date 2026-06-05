@@ -16,11 +16,10 @@ final class VideoController {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
 
-    /// Load a recording from its on-disk path. No-ops if the file is missing
-    /// (e.g. Simulator runs, or a temp file the OS has since purged).
-    func load(path: String?) {
-        guard let path, FileManager.default.fileExists(atPath: path) else { return }
-        let newURL = URL(fileURLWithPath: path)
+    /// Load a recording from its resolved file URL. No-ops if the file is
+    /// missing (e.g. Simulator runs, or a temp clip the OS has since purged).
+    func load(url newURL: URL?) {
+        guard let newURL, FileManager.default.fileExists(atPath: newURL.path) else { return }
         guard newURL != url else { return }
         url = newURL
         hasVideo = true

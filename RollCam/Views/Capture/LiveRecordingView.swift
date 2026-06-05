@@ -276,18 +276,24 @@ struct LiveRecordingView: View {
     }
 
     /// Move the just-recorded clip out of the purgeable temp dir into
-    /// Application Support so it survives for later review. Returns the saved path.
+    /// Application Support so it survives for later review.
+    ///
+    /// Returns the bare *filename* (not an absolute path): the sandbox container
+    /// path changes when the app is reinstalled, so Session.videoURL rebuilds
+    /// the full URL against the live container at read time. Falls back to an
+    /// absolute path only if the move fails.
     private static func persistVideo(_ src: URL, id: UUID) -> String? {
         let fm = FileManager.default
         guard let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                         appropriateFor: nil, create: true) else { return src.path }
         let dir = support.appendingPathComponent("Videos", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dst = dir.appendingPathComponent("\(id.uuidString).mov")
+        let name = "\(id.uuidString).mov"
+        let dst = dir.appendingPathComponent(name)
         try? fm.removeItem(at: dst)
         do {
             try fm.moveItem(at: src, to: dst)
-            return dst.path
+            return name
         } catch {
             return src.path
         }

@@ -100,6 +100,33 @@ final class Session {
         self.voiceNotePath = voiceNotePath
     }
 
+    // MARK: Video file
+
+    /// Resolve the recording to a file URL in the *current* sandbox container.
+    ///
+    /// New recordings store `videoPath` as a bare filename; older sessions may
+    /// hold a full absolute path. The app's container UUID changes when it's
+    /// reinstalled, so a persisted absolute path goes stale — we must rebuild
+    /// the URL against the live Application Support directory each time. Returns
+    /// nil when no file exists (e.g. a purged temp clip or a pre-fix session).
+    var videoURL: URL? {
+        guard let videoPath, !videoPath.isEmpty else { return nil }
+        let fm = FileManager.default
+        // Legacy absolute path that still resolves on this install.
+        if videoPath.hasPrefix("/"), fm.fileExists(atPath: videoPath) {
+            return URL(fileURLWithPath: videoPath)
+        }
+        // Resolve the filename against Application Support/Videos in the live container.
+        let name = (videoPath as NSString).lastPathComponent
+        if let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                     appropriateFor: nil, create: false) {
+            let url = support.appendingPathComponent("Videos", isDirectory: true)
+                .appendingPathComponent(name)
+            if fm.fileExists(atPath: url.path) { return url }
+        }
+        return nil
+    }
+
     // MARK: Display helpers
 
     var durationLabel: String { Self.clock(durationSeconds) }

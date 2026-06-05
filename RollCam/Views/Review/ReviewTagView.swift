@@ -48,7 +48,7 @@ struct ReviewTagView: View {
         }
         .scrollIndicators(.hidden)
         .ignoresSafeArea(edges: .top)
-        .onAppear { video.load(path: session.videoPath) }
+        .onAppear { video.load(url: session.videoURL) }
         .onDisappear { video.pause() }
         .onChange(of: video.progress) { _, newValue in
             if video.isPlaying { ph = newValue }
