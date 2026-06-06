@@ -8,14 +8,7 @@ struct ReviewTagView: View {
 
     @State private var ph: Double = 0.46
     @State private var video = VideoController()
-
-    private let tagOptions: [(String, String)] = [
-        ("Submission", "figure.martial.arts"),
-        ("Sweep", "arrow.triangle.2.circlepath"),
-        ("Bad pos", "shield"),
-        ("Scramble", "bolt.fill"),
-        ("Tap", "checkmark"),
-    ]
+    @State private var moveCategory: MoveCategory = .outcomes
 
     private var n: Int { max(1, session.series.count) }
     private var bpmAt: Int {
@@ -135,18 +128,31 @@ struct ReviewTagView: View {
                 Spacer()
                 Text("drops at \(timeAt)").font(RC.mono(10)).foregroundStyle(RC.text3)
             }
-            HStack(spacing: 8) {
-                ForEach(tagOptions, id: \.0) { tag, icon in
-                    Button { addTag(tag, symbol: icon) } label: {
-                        VStack(spacing: 7) {
-                            Image(systemName: icon).font(.system(size: 19)).foregroundStyle(RC.text)
-                            Text(tag.uppercased()).font(RC.mono(8))
-                                .foregroundStyle(RC.text2)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(MoveCategory.allCases) { cat in
+                        Chip(label: cat.label, selected: moveCategory == cat) {
+                            moveCategory = cat
+                        }
+                    }
+                }
+            }
+            .scrollClipDisabled()
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)],
+                      alignment: .leading, spacing: 8) {
+                ForEach(moveCategory.moves) { m in
+                    Button { addTag(m.name, symbol: m.symbol) } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: m.symbol).font(.system(size: 14)).foregroundStyle(RC.text2)
+                            Text(m.name).font(.system(size: 12)).foregroundStyle(RC.text)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                            Spacer(minLength: 0)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(RC.surface2, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
+                        .padding(.vertical, 10).padding(.horizontal, 11)
+                        .background(RC.surface2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(RC.line, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
